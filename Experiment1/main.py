@@ -1,16 +1,16 @@
 import os
 import argparse
 import numpy as np
-from sklearn import datasets
 from sklearn.model_selection import train_test_split
-from data_processing import save_mean_median_images, load_median_image
+from data_processing import load_dataset, save_mean_median_images, load_median_image
 from evolution import run_evolution, evaluate_model_with_foolability
 from models import get_model, train_model
 from deap import base, creator, tools
 
 def main():
     # Command-line argument parsing
-    parser = argparse.ArgumentParser(description="Run machine learning models on digits dataset.")
+    parser = argparse.ArgumentParser(description="Run machine learning models on various datasets.")
+    parser.add_argument("dataset_name", type=str, help="Dataset name (e.g., sklearnDigits, mnistDigits, mnistFashion, CIFAR10, CIFAR100)")
     parser.add_argument("model_name", type=str, help="Model name (e.g., SVM, RF, CNN, RNN)")
     parser.add_argument("target_digit", type=int, help="Target digit to train and evolve")
     parser.add_argument("gen_interval", type=int, help="Interval for saving generation images")
@@ -19,26 +19,29 @@ def main():
     args = parser.parse_args()
 
     # Extract values from arguments
+    dataset_name = args.dataset_name
     model_name = args.model_name
     target_digit = args.target_digit
     generation_interval = args.gen_interval
     replicate = args.replicate
     ngen = args.ngen
 
-    # Load data
-    digits = datasets.load_digits()
-    X = digits.images / 16.0
-    y = np.eye(10)[digits.target]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Load dataset
+    print(f"Loading dataset: {dataset_name}")
+    X, y, input_shape, num_classes = load_dataset(dataset_name)
 
-    # Ensure mean and median images are saved
-    mean_median_dir = "mean_median_images"
-    save_mean_median_images(X_train, y_train, mean_median_dir)
+    # Dynamically set the mean/median image directory based on the dataset name
+    mean_median_dir = os.path.join("mean_median_images", dataset_name)
+    os.makedirs(mean_median_dir, exist_ok=True)
 
-    # Get and train the model
-    input_shape = X_train[0].shape
+    # Save mean and median images
+    print("Saving mean and median images...")
+    save_mean_median_images(X, y, mean_median_dir)
+
+    # Train the selected model
+    print(f"Training model: {model_name}")
     model = get_model(model_name, input_shape)
-    trained_model = train_model(model, model_name, X_train, y_train)
+    trained_model = train_model(model, model_name, X, y)
 
     # Evolutionary setup
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -54,10 +57,11 @@ def main():
         ind, trained_model, input_shape, load_median_image(mean_median_dir, target_digit), target_digit))
 
     # Output directory for evolution results
-    output_dir = os.path.join("evolution_results", model_name)
+    output_dir = os.path.join("evolution_results", dataset_name, model_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Run evolution
+    print("Running evolution...")
     run_evolution(
         toolbox=toolbox,
         ngen=ngen,

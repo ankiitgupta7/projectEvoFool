@@ -62,10 +62,11 @@ def train_model(model, model_name, X_train, y_train):
     Automatically adjusts input shape for CNN and RNN models.
     """
     if model_name in ["CNN", "RNN"]:
-        # Add channel dimension for CNN and RNN
-        X_train = X_train[..., np.newaxis]  # Shape becomes (batch_size, height, width, 1)
+        # Add channel dimension for grayscale images
+        if len(X_train.shape) == 3:  # Grayscale data
+            X_train = X_train[..., np.newaxis]
         model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
     else:
         # Flatten the input for non-CNN/RNN models
-        model.fit(X_train.reshape((-1, X_train.shape[1] * X_train.shape[2])), y_train.argmax(axis=1))
+        model.fit(X_train.reshape((X_train.shape[0], -1)), y_train.argmax(axis=1))
     return model

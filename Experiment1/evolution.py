@@ -19,7 +19,7 @@ def evaluate_model_with_foolability(individual, model, input_shape, median_image
         probabilities = model.predict_proba(image_expanded)
     
     confidence_score = probabilities[0][target_digit]
-    foolability_score = confidence_score - abs(ssim_score)
+    foolability_score =  ssim_score - confidence_score
     return foolability_score, confidence_score, ssim_score
 
 # Evolutionary algorithm to optimize images
