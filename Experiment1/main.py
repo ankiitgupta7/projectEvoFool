@@ -1,8 +1,7 @@
 import os
 import argparse
 import numpy as np
-from sklearn.model_selection import train_test_split
-from data_processing import load_dataset, save_mean_median_images, load_median_image
+from data_processing import load_dataset, save_mean_median_images, load_median_image, evaluate_model_accuracy
 from evolution import run_evolution, evaluate_model_with_foolability
 from models import get_model, train_model
 from deap import base, creator, tools
@@ -28,20 +27,23 @@ def main():
 
     # Load dataset
     print(f"Loading dataset: {dataset_name}")
-    X, y, input_shape, num_classes = load_dataset(dataset_name)
+    X_train, X_test, y_train, y_test, input_shape, num_classes = load_dataset(dataset_name)
 
     # Dynamically set the mean/median image directory based on the dataset name
     mean_median_dir = os.path.join("mean_median_images", dataset_name)
     os.makedirs(mean_median_dir, exist_ok=True)
 
-    # Save mean and median images
+    # Save mean and median images using training data
     print("Saving mean and median images...")
-    save_mean_median_images(X, y, mean_median_dir)
+    save_mean_median_images(X_train, y_train, mean_median_dir)
 
     # Train the selected model
-    print(f"Training model: {model_name}")
+    print("Training the model...")
     model = get_model(model_name, input_shape)
-    trained_model = train_model(model, model_name, X, y)
+    trained_model = train_model(model, model_name, X_train, y_train)
+
+    # Evaluate the model
+    evaluate_model_accuracy(trained_model, model_name, X_train, y_train, X_test, y_test)
 
     # Evolutionary setup
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
