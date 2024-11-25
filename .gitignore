@@ -1,0 +1,7 @@
+/mean_median_images/
+/mean_median_images/*
+/evolution_results/
+/evolution_results/*
+digit*
+scores*
+*.pyc
