@@ -126,4 +126,4 @@ def load_median_image(output_dir, digit, num_channels=1):
         median_image = np.mean(median_image, axis=-1)
     elif num_channels == 3 and len(median_image.shape) == 2:  # Convert grayscale to RGB if needed
         median_image = np.stack([median_image] * 3, axis=-1)
-    return median_image
+    return median_image / np.max(median_image)

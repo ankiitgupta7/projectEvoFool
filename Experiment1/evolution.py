@@ -8,7 +8,14 @@ from visualisation import render_images_in_batches, plot_scores_vs_generations
 
 # Evaluate model with foolability
 def evaluate_model_with_foolability(individual, model, input_shape, median_image, target_digit):
+
     image = np.array(individual).reshape(*input_shape)
+
+    if not (0 <= image.min() <= image.max() <= 1):
+        raise ValueError("Image values are not normalized.")
+    if not (0 <= median_image.min() <= median_image.max() <= 1):
+        raise ValueError("Median image values are not normalized.")
+
     ssim_score = compute_ssim(image, median_image)
     
     if isinstance(model, tf.keras.Model):  # TensorFlow model check
@@ -19,13 +26,15 @@ def evaluate_model_with_foolability(individual, model, input_shape, median_image
         probabilities = model.predict_proba(image_expanded)
     
     confidence_score = probabilities[0][target_digit]
-    foolability_score =  ssim_score - confidence_score
+    # foolability_score = confidence_score - abs(ssim_score)
+
+    foolability_score = - confidence_score + ssim_score
     return foolability_score, confidence_score, ssim_score
 
 # Evolutionary algorithm to optimize images
 def run_evolution(toolbox, ngen, model, input_shape, target_digit, output_subdir, generation_interval, replicate, median_image, model_name):
     os.makedirs(output_subdir, exist_ok=True)
-    population = toolbox.population(n=100)
+    population = toolbox.population(n=50)
 
     # Lists to track generation-wise metrics
     generation_images = []
@@ -56,6 +65,11 @@ def run_evolution(toolbox, ngen, model, input_shape, target_digit, output_subdir
                 if np.random.rand() < 0.2:
                     toolbox.mutate(mutant)
                     del mutant.fitness.values
+
+            # Clamp values to [0, 1]
+            for ind in offspring:
+                for i in range(len(ind)):
+                    ind[i] = np.clip(ind[i], 0, 1)
 
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = map(toolbox.evaluate, invalid_ind)
