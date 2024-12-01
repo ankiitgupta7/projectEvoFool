@@ -3,17 +3,21 @@ import argparse
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from evolution import run_evolution, evaluate_model_with_foolability
+from evolution import run_evolution, fitness, collect_scores
 from unpickle import load_saved_dataset, load_median_image, load_best_image, load_trained_model
 from deap import base, creator, tools
 
+# runs with the following example command: python run.py 3 sklearnDigits SVM 5 5 SSIM 50 300 10000000
 
 def run():
     # Command-line argument parsing
     parser = argparse.ArgumentParser(description="Run machine learning models on various datasets.")
+    parser.add_argument("experiment_number", type=str, help="Experiment number (e.g., 1, 2.1.1, 2.1.2, 2.2, 3)")
     parser.add_argument("dataset_name", type=str, help="Dataset name (e.g., sklearnDigits, mnistDigits, mnistFashion, CIFAR10, CIFAR100)")
     parser.add_argument("model_name", type=str, help="Model name (e.g., SVM, RF, CNN, RNN)")
-    parser.add_argument("target_digit", type=int, help="Target digit to train and evolve")
+    parser.add_argument("target_digit_for_confidence", type=int, help="Target digit for model confidence")
+    parser.add_argument("target_digit_for_similarity", type=int, help="Target digit for similarity comparison")
+    parser.add_argument("similarity_metric", type=str, help="Similarity metric to use for evaluation (e.g., SSIM, NCC, LPIPS, PSNR)")
     parser.add_argument("gen_interval", type=int, help="Interval for saving generation images")
     parser.add_argument("replicate", type=int, help="Replicate index")
     parser.add_argument("ngen", type=int, help="Number of generations for evolution")
@@ -22,32 +26,15 @@ def run():
     args = parser.parse_args()
 
     # Extract values from arguments
+    experiment_number = args.experiment_number
     dataset_name = args.dataset_name
     model_name = args.model_name
-    target_digit = args.target_digit
+    target_digit_for_confidence = args.target_digit_for_confidence
+    target_digit_for_similarity = args.target_digit_for_similarity
+    similarity_metric = args.similarity_metric
     generation_interval = args.gen_interval
     replicate = args.replicate
     ngen = args.ngen
-
-    # # Load dataset from pickle file
-    # print(f"loading dataset: {dataset_name}")
-    # X_train, X_test, y_train, y_test, input_shape, num_classes = load_saved_dataset(dataset_name)
-    # print("Dataset loaded successfully:")
-    # print(f"X_train shape: {X_train.shape}")
-    # print(f"X_test shape: {X_test.shape}")
-    # print(f"y_train shape: {y_train.shape}")
-    # print(f"y_test shape: {y_test.shape}")
-    # print(f"Input shape: {input_shape}")
-    # print(f"Number of classes: {num_classes}")
-
-    # # Load median image for the target digit
-    # median_image = load_median_image(dataset_name, target_digit)
-    # print(f"Median image for digit {target_digit} loaded successfully.")
-    # print(f"Median image shape: {median_image.shape}")
-
-    # # Load the trained model
-    # trained_model = load_trained_model(dataset_name, model_name)
-    # print(f"Trained model loaded successfully.")
 
 
     # Load dataset from pickle file
@@ -63,36 +50,26 @@ def run():
 
 
     # Load median image for the target digit
-    median_image = load_median_image(dataset_name, target_digit)
-    print(f"Median image for digit {target_digit} loaded successfully.")
+    median_image = load_median_image(dataset_name, target_digit_for_similarity)
+    print(f"Median image for digit {target_digit_for_similarity} loaded successfully.")
     print(f"Median image shape: {median_image.shape}")
 
-    # Visualize the median image
-    plt.imshow(median_image.squeeze(), cmap="gray")
-    plt.title(f"Median Image for Digit {target_digit}")
-    plt.show()
 
     # Validate median image
     assert median_image.shape == input_shape, "Median image shape mismatch!"
 
-    # Load the best image for the target digit
-    best_image_data = load_best_image(dataset_name, model_name, target_digit, "train")
-    best_image = best_image_data["image"]
-    confidence = best_image_data["confidence"]
-    class_label = best_image_data["class"]
+    # Load the training image for which model has the highest confidence for the target digit 
+    best_confidence_image_data = load_best_image(dataset_name, model_name, target_digit_for_similarity, "train")
+    best_confidence_image = best_confidence_image_data["image"]
+    confidence = best_confidence_image_data["confidence"]
+    class_label = best_confidence_image_data["class"]
 
     print(f"Best image for class {class_label} loaded successfully.")
     print(f"Confidence score: {confidence}")
-    print(f"Image shape: {best_image.shape}")
-
-    # Visualize the best image
-    plt.imshow(best_image.squeeze(), cmap="gray" if best_image.ndim == 2 else None)
-    plt.title(f"Best Image for Class {class_label}\nConfidence: {confidence:.4f}")
-    plt.axis("off")
-    plt.show()
+    print(f"Image shape: {best_confidence_image.shape}")
 
     
-    image_for_similarity_comarison = best_image
+    image_for_similarity_comarison = best_confidence_image
 
     # Load the trained model
     trained_model = load_trained_model(dataset_name, model_name)
@@ -116,9 +93,13 @@ def run():
     toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=1, indpb=0.2)  # Gaussian mutation
     toolbox.register("select", tools.selTournament, tournsize=3)  # Tournament selection
 
+
     # Evaluation function
-    toolbox.register("evaluate", lambda ind: evaluate_model_with_foolability(
-        ind, trained_model, input_shape, image_for_similarity_comarison, target_digit))
+    toolbox.register("evaluate", lambda ind: (
+        lambda confidence_score, ssim_score, ncc_score: (fitness(confidence_score, ssim_score),))(
+            *collect_scores(ind, trained_model, input_shape, image_for_similarity_comarison, target_digit_for_confidence)
+        )
+    )
 
     # Output directory for evolution results
     output_dir = os.path.join("data_generated", dataset_name, model_name)
@@ -127,11 +108,13 @@ def run():
     # Run evolution
     print("Running evolution...")
     run_evolution(
+        experiment_number=experiment_number,
         toolbox=toolbox,
         ngen=ngen,
         model=trained_model,
         input_shape=input_shape,
-        target_digit=target_digit,
+        target_digit_for_confidence=target_digit_for_confidence,
+        similarity_metric=similarity_metric,
         output_subdir=output_dir,
         generation_interval=generation_interval,
         replicate=replicate,
