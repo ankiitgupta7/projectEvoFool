@@ -70,3 +70,41 @@ def train_model(model, model_name, X_train, y_train):
         # Flatten the input for non-CNN/RNN models
         model.fit(X_train.reshape((X_train.shape[0], -1)), y_train.argmax(axis=1))
     return model
+
+
+def evaluate_model_accuracy(model, model_name, X_train, y_train, X_test, y_test):
+    """
+    Evaluate overall and per-class accuracy of the model.
+    """
+    print("\nModel Evaluation:")
+    
+    # Predict and calculate overall accuracy
+    if model_name in ["CNN", "RNN"]:
+        train_pred = model.predict(X_train[..., np.newaxis])  # 2D predictions
+        test_pred = model.predict(X_test[..., np.newaxis])    # 2D predictions
+        train_pred = np.argmax(train_pred, axis=1)  # Convert to class indices
+        test_pred = np.argmax(test_pred, axis=1)    # Convert to class indices
+    else:
+        train_pred = model.predict(X_train.reshape(X_train.shape[0], -1))  # 1D predictions for scikit-learn models
+        test_pred = model.predict(X_test.reshape(X_test.shape[0], -1))
+    
+    # Convert y_train and y_test to class indices
+    y_train_indices = np.argmax(y_train, axis=1) if y_train.ndim == 2 else y_train
+    y_test_indices = np.argmax(y_test, axis=1) if y_test.ndim == 2 else y_test
+    
+    # Overall accuracy
+    train_acc = np.mean(train_pred == y_train_indices)
+    test_acc = np.mean(test_pred == y_test_indices)
+    
+    print(f"Overall Train Accuracy: {train_acc:.4f}")
+    print(f"Overall Test Accuracy: {test_acc:.4f}")
+    
+    # Per-class accuracy
+    num_classes = y_train.shape[1] if y_train.ndim == 2 else len(np.unique(y_train))
+    print("\nPer-Class Accuracy:")
+    for cls in range(num_classes):
+        train_cls_indices = y_train_indices == cls
+        test_cls_indices = y_test_indices == cls
+        train_cls_acc = np.mean(train_pred[train_cls_indices] == cls) if np.any(train_cls_indices) else 0
+        test_cls_acc = np.mean(test_pred[test_cls_indices] == cls) if np.any(test_cls_indices) else 0
+        print(f"Class {cls}: Train Accuracy = {train_cls_acc:.4f}, Test Accuracy = {test_cls_acc:.4f}")

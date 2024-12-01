@@ -7,16 +7,16 @@ from metrics import compute_ncc, compute_ssim
 from visualisation import render_images_in_batches, plot_scores_vs_generations
 
 # Evaluate model with foolability
-def evaluate_model_with_foolability(individual, model, input_shape, median_image, target_digit):
+def evaluate_model_with_foolability(individual, model, input_shape, image_for_similarity_comarison, target_digit):
 
     image = np.array(individual).reshape(*input_shape)
 
     if not (0 <= image.min() <= image.max() <= 1):
         raise ValueError("Image values are not normalized.")
-    if not (0 <= median_image.min() <= median_image.max() <= 1):
+    if not (0 <= image_for_similarity_comarison.min() <= image_for_similarity_comarison.max() <= 1):
         raise ValueError("Median image values are not normalized.")
 
-    ssim_score = compute_ssim(image, median_image)
+    ssim_score = compute_ssim(image, image_for_similarity_comarison)
     
     if isinstance(model, tf.keras.Model):  # TensorFlow model check
         image_expanded = np.array(individual).reshape(1, *input_shape, 1)
@@ -37,7 +37,7 @@ def evaluate_model_with_foolability(individual, model, input_shape, median_image
 
 
 # Evolutionary algorithm to optimize images
-def run_evolution(toolbox, ngen, model, input_shape, target_digit, output_subdir, generation_interval, replicate, median_image, model_name):
+def run_evolution(toolbox, ngen, model, input_shape, target_digit, output_subdir, generation_interval, replicate, image_for_similarity_comarison, model_name):
     os.makedirs(output_subdir, exist_ok=True)
     population = toolbox.population(n=50)
 
@@ -92,9 +92,9 @@ def run_evolution(toolbox, ngen, model, input_shape, target_digit, output_subdir
             best_ind = tools.selBest(population, 1)[0]  # Select the best individual
             best_image = np.array(best_ind).reshape(input_shape)
             foolability_score, confidence_score, ssim_score = evaluate_model_with_foolability(
-                best_ind, model, input_shape, median_image, target_digit
+                best_ind, model, input_shape, image_for_similarity_comarison, target_digit
             )
-            ncc_score = compute_ncc(best_image, median_image)
+            ncc_score = compute_ncc(best_image, image_for_similarity_comarison)
 
             # Save scores to CSV
             writer.writerow([gen, foolability_score, confidence_score, ssim_score, ncc_score])

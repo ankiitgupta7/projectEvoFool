@@ -1,9 +1,9 @@
 import os
 import argparse
 import numpy as np
-from data_processing import load_dataset, save_mean_median_images, load_median_image, evaluate_model_accuracy
+from data_processing import load_dataset, save_mean_median_images, load_median_image
 from evolution import run_evolution, evaluate_model_with_foolability
-from models import get_model, train_model
+from models import get_model, train_model, evaluate_model_accuracy
 from deap import base, creator, tools
 
 def main():
@@ -49,12 +49,20 @@ def main():
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
     creator.create("Individual", list, fitness=creator.FitnessMax)
     toolbox = base.Toolbox()
+
+    # Attribute generator for individuals
     toolbox.register("attr_float", np.random.rand)
+
+    # Individual and population initialization
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, np.prod(input_shape))
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    toolbox.register("mate", tools.cxTwoPoint)
-    toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=1, indpb=0.2)
-    toolbox.register("select", tools.selTournament, tournsize=3)
+
+    # Genetic operations
+    toolbox.register("mate", tools.cxOnePoint)  # Register One-Point Crossover
+    toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=1, indpb=0.2)  # Gaussian mutation
+    toolbox.register("select", tools.selTournament, tournsize=3)  # Tournament selection
+
+    # Evaluation function
     toolbox.register("evaluate", lambda ind: evaluate_model_with_foolability(
         ind, trained_model, input_shape, load_median_image(mean_median_dir, target_digit), target_digit))
 

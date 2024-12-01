@@ -5,5 +5,10 @@
 digit*
 scores*
 *.pyc
+*.json
+*.pkl
+*.csv
+*.keras
 class*
 test*
+Test/*
