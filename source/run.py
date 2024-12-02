@@ -12,7 +12,7 @@ from deap import base, creator, tools
 def run():
     # Command-line argument parsing
     parser = argparse.ArgumentParser(description="Run machine learning models on various datasets.")
-    parser.add_argument("experiment_number", type=str, help="Experiment number (e.g., 1, 2.1.1, 2.1.2, 2.2, 3)")
+    parser.add_argument("experiment_number", type=str, help="Experiment number (e.g., 1, 2_1_1, 2_1_2, 2_2, 3)")
     parser.add_argument("dataset_name", type=str, help="Dataset name (e.g., sklearnDigits, mnistDigits, mnistFashion, CIFAR10, CIFAR100)")
     parser.add_argument("model_name", type=str, help="Model name (e.g., SVM, RF, CNN, RNN)")
     parser.add_argument("target_digit_for_confidence", type=int, help="Target digit for model confidence")
@@ -55,16 +55,13 @@ def run():
     print(f"Median image shape: {median_image.shape}")
 
 
-    # Validate median image
-    assert median_image.shape == input_shape, "Median image shape mismatch!"
-
     # Load the training image for which model has the highest confidence for the target digit 
     best_confidence_image_data = load_best_image(dataset_name, model_name, target_digit_for_similarity, "train")
     best_confidence_image = best_confidence_image_data["image"]
     confidence = best_confidence_image_data["confidence"]
     class_label = best_confidence_image_data["class"]
 
-    print(f"Best image for class {class_label} loaded successfully.")
+    print(f"Best confidence image for class {class_label} loaded successfully.")
     print(f"Confidence score: {confidence}")
     print(f"Image shape: {best_confidence_image.shape}")
 
@@ -102,7 +99,7 @@ def run():
     )
 
     # Output directory for evolution results
-    output_dir = os.path.join("data_generated", dataset_name, model_name)
+    output_dir = os.path.join("data_generated", experiment_number, dataset_name, model_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # Run evolution
@@ -114,6 +111,7 @@ def run():
         model=trained_model,
         input_shape=input_shape,
         target_digit_for_confidence=target_digit_for_confidence,
+        target_digit_for_similarity=target_digit_for_similarity,
         similarity_metric=similarity_metric,
         output_subdir=output_dir,
         generation_interval=generation_interval,

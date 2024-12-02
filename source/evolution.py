@@ -7,7 +7,7 @@ from metrics import compute_ncc, compute_ssim
 from visualisation import render_images_in_batches, plot_scores_vs_generations
 
 # Collect scores (confidence, SSIM, NCC)
-def collect_scores(individual, model, input_shape, image_for_similarity_comarison, target_digit):
+def collect_scores(individual, model, input_shape, image_for_similarity_comarison, target_digit_for_confidence, target_digit_for_similarity):
     """
     Compute confidence, SSIM, and NCC scores for a given individual.
     """
@@ -29,33 +29,37 @@ def collect_scores(individual, model, input_shape, image_for_similarity_comariso
         image_expanded = np.array(individual).reshape(1, -1)
         probabilities = model.predict_proba(image_expanded)
 
-    confidence_score = probabilities[0][target_digit]
+    confidence_score_for_target_digit = probabilities[0][target_digit_for_confidence]
+
+    confidence_score_for_similarity_digit = probabilities[0][target_digit_for_similarity]
+
+    confidence_scores = probabilities[0]
 
     # Compute NCC
     ncc_score = compute_ncc(image, image_for_similarity_comarison)
 
-    return confidence_score, ssim_score, ncc_score
+    return confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score, ncc_score, confidence_scores
 
 
 # Compute fitness based on scores
-def fitness(experiment_number, confidence_score, ssim_score):
+def fitness(experiment_number, confidence_score_for_target_digit, ssim_score):
     """
     Compute the fitness of an individual based on the experiment number.
     """
     if experiment_number == "1":
-        return confidence_score
-    elif experiment_number == "2.1.1":
-        return ssim_score - confidence_score
-    elif experiment_number == "2.1.2":
-        return (ssim_score + confidence_score)/2
-    elif experiment_number == "2.2":
-        return confidence_score - abs(ssim_score)
+        return confidence_score_for_target_digit
+    elif experiment_number == "2_1_1":
+        return ssim_score - confidence_score_for_target_digit
+    elif experiment_number == "2_1_2":
+        return (ssim_score + confidence_score_for_target_digit)/2
+    elif experiment_number == "2_2":
+        return confidence_score_for_target_digit - abs(ssim_score)
     elif experiment_number == "3":
         return ssim_score
 
 
 # Evolutionary algorithm to optimize images
-def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_digit_for_confidence, similarity_metric, output_subdir, generation_interval, replicate, image_for_similarity_comarison, model_name):
+def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_digit_for_confidence, target_digit_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, image_for_similarity_comarison, model_name):
     """
     Run the evolutionary algorithm to optimize images.
     """
@@ -73,8 +77,6 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
     scores_csv_path = os.path.join(output_subdir, f'scores_digit_{target_digit_for_confidence}_rep{replicate}.csv')
     with open(scores_csv_path, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Generation", "Fitness", "Confidence", "SSIM", "NCC"])
-
         for gen in range(ngen + 1):
             # 1. Selection: Select individuals for the next generation
             offspring = toolbox.select(population, len(population))
@@ -103,10 +105,10 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
             # 6. Evaluation: Evaluate the fitness of individuals with invalid fitness
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             for ind in invalid_ind:
-                confidence_score, ssim_score, ncc_score = collect_scores(
-                    ind, model, input_shape, image_for_similarity_comarison, target_digit_for_confidence
+                confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score, ncc_score, confidence_scores = collect_scores(
+                    ind, model, input_shape, image_for_similarity_comarison, target_digit_for_confidence, target_digit_for_similarity
                 )
-                fitness_score = fitness(experiment_number, confidence_score, ssim_score)
+                fitness_score = fitness(experiment_number, confidence_score_for_target_digit, ssim_score)
                 ind.fitness.values = (fitness_score,)
 
             # 7. Replacement: Replace the old population with the new offspring
@@ -115,20 +117,27 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
             # 8. Get the best individual of the generation
             best_ind = tools.selBest(population, 1)[0]  # Select the best individual
             best_image = np.array(best_ind).reshape(input_shape)
-            confidence_score, ssim_score, ncc_score = collect_scores(
-                best_ind, model, input_shape, image_for_similarity_comarison, target_digit_for_confidence
+            confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score, ncc_score, confidence_scores = collect_scores(
+                best_ind, model, input_shape, image_for_similarity_comarison, target_digit_for_confidence, target_digit_for_similarity
             )
-            
-            fitness_score = fitness(experiment_number, confidence_score, ssim_score)
+
+            fitness_score = fitness(experiment_number, confidence_score_for_target_digit, ssim_score)
 
             # Save scores to CSV
-            writer.writerow([gen, fitness_score, confidence_score, ssim_score, ncc_score])
+            if gen == 0:
+                # Write header with dynamic confidence score columns
+                header = ["Generation", "Fitness", "Confidence (Target Class)", "Confidence (Similarity Class)", "SSIM", "NCC"] + [f"Confidence_Class_{i}" for i in range(len(confidence_scores))]
+                writer.writerow(header)
+
+            # Write row with dynamic confidence score columns
+            row = [gen, fitness_score, confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score, ncc_score] + list(confidence_scores)
+            writer.writerow(row)
             file.flush()
 
             # 9. Track metrics and visualize results at intervals
             if gen % generation_interval == 0 or gen == ngen:
                 generation_images.append(best_image)
-                generation_confidences.append(confidence_score)
+                generation_confidences.append(confidence_score_for_target_digit)
                 generation_ssims.append(ssim_score)
                 generation_nccs.append(ncc_score)
                 generation_indices.append(gen)
