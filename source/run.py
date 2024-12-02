@@ -55,6 +55,12 @@ def run():
     print(f"Median image shape: {median_image.shape}")
 
 
+    # # Visualize the median image
+    # plt.imshow(median_image.squeeze(), cmap="gray")
+    # plt.title(f"Median Image for Digit {target_digit_for_similarity}")
+    # plt.show()
+
+
     # Load the training image for which model has the highest confidence for the target digit 
     best_confidence_image_data = load_best_image(dataset_name, model_name, target_digit_for_similarity, "train")
     best_confidence_image = best_confidence_image_data["image"]
@@ -65,8 +71,15 @@ def run():
     print(f"Confidence score: {confidence}")
     print(f"Image shape: {best_confidence_image.shape}")
 
-    
-    image_for_similarity_comarison = best_confidence_image
+    # # Visualize the best image
+    # plt.imshow(best_confidence_image.squeeze(), cmap="gray")
+    # plt.title(f"Best Image for Class {class_label}\nConfidence: {confidence:.4f}")
+    # plt.axis("off")
+    # plt.show()
+
+
+
+    image_for_similarity_comarison = median_image
 
     # Load the trained model
     trained_model = load_trained_model(dataset_name, model_name)
