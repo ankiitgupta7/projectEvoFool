@@ -1,0 +1,24 @@
+{
+    "Dataset Name": "sklearnDigits",
+    "Train Samples": 1437,
+    "Test Samples": 360,
+    "Dataset Dimension": [
+        8,
+        8
+    ],
+    "Number of Classes": 10,
+    "Pixel Range": "0.0 to 1.0",
+    "Image Type": "Grayscale",
+    "Labels": {
+        "0": "0",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4",
+        "5": "5",
+        "6": "6",
+        "7": "7",
+        "8": "8",
+        "9": "9"
+    }
+}
