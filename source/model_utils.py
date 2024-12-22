@@ -9,6 +9,8 @@ from skimage.io import imsave
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
+from xgboost import XGBClassifier
+
 # Load dataset
 def load_saved_dataset(dataset_name):
     """
@@ -39,6 +41,8 @@ def get_model(model_name, input_shape):
         return RandomForestClassifier()
     elif model_name == "GBM":
         return GradientBoostingClassifier()
+    elif model_name == "XGB":
+        return XGBClassifier()
     elif model_name == "MLP":
         return MLPClassifier(hidden_layer_sizes=(100,), max_iter=500)
     else:
@@ -255,9 +259,10 @@ def save_best_images_per_class(X_data, probs, y_data, data_type, model_name, out
 
 # Run the model processing pipeline
 if __name__ == "__main__":
-    dataset_name = "Digits"  # Replace with your dataset name
-    model_names = ["CNN", "RNN", "SVM", "RF", "GBM", "MLP"]  # List of models to test
+    dataset_names = ["sklearnDigits", "mnistDigits", "mnistFashion", "CIFAR10", "CIFAR100"]  # Replace with your dataset names
+    model_names = ["CNN", "RNN", "SVM", "RF", "GBM", "XGB", "MLP"]  # List of models to test
 
-    for model_name in model_names:
-        print(f"Processing model: {model_name}")
-        train_and_evaluate_model(dataset_name, model_name)
+    for dataset_name in dataset_names:
+        for model_name in model_names:
+            print(f"Processing model: {model_name} on dataset: {dataset_name}")
+            train_and_evaluate_model(dataset_name, model_name)

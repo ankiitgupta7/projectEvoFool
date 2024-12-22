@@ -50,13 +50,15 @@ def run():
 
 
     # Load median image for the target digit
-    median_image = load_median_image(dataset_name, target_digit_for_similarity)
-    print(f"Median image for digit {target_digit_for_similarity} loaded successfully.")
-    print(f"Median image shape: {median_image.shape}")
+    median_image_similarity_class = load_median_image(dataset_name, target_digit_for_similarity)
+    median_image_target_class = load_median_image(dataset_name, target_digit_for_confidence)
+
+    print(f"Median image for similarity_class {target_digit_for_similarity} loaded successfully.")
+    print(f"Median image shape: {median_image_similarity_class.shape}")
 
 
     # # Visualize the median image
-    # plt.imshow(median_image.squeeze(), cmap="gray")
+    # plt.imshow(median_image_similarity_class.squeeze(), cmap="gray")
     # plt.title(f"Median Image for Digit {target_digit_for_similarity}")
     # plt.show()
 
@@ -79,7 +81,8 @@ def run():
 
 
 
-    image_for_similarity_comarison = median_image
+    image_for_similarity_comarison = median_image_similarity_class
+    target_image = median_image_target_class
 
     # Load the trained model
     trained_model = load_trained_model(dataset_name, model_name)
@@ -106,8 +109,8 @@ def run():
 
     # Evaluation function
     toolbox.register("evaluate", lambda ind: (
-        lambda confidence_score, ssim_score, ncc_score: (fitness(confidence_score, ssim_score),))(
-            *collect_scores(ind, trained_model, input_shape, image_for_similarity_comarison, target_digit_for_confidence)
+        lambda confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score, ncc_score, confidence_scores: (fitness(experiment_number, confidence_score_for_target_digit, ssim_score, confidence_score_for_similarity_digit),))(
+            *collect_scores(ind, trained_model, input_shape, target_image, image_for_similarity_comarison, target_digit_for_confidence)
         )
     )
 
@@ -129,8 +132,10 @@ def run():
         output_subdir=output_dir,
         generation_interval=generation_interval,
         replicate=replicate,
-        image_for_similarity_comarison=image_for_similarity_comarison,
+        target_image = target_image, # median image for target digit - for which confidence is calculated
+        image_for_similarity_comarison=image_for_similarity_comarison, # median image for similarity digit - for which similarity is calculated
         model_name=model_name,
+        dataset_name=dataset_name,
     )
 
 
