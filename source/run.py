@@ -166,7 +166,7 @@ def run():
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     # Genetic operations
-    toolbox.register("mate", tools.cxOnePoint)  # Register One-Point Crossover
+    # toolbox.register("mate", tools.cxOnePoint)  # Register One-Point Crossover - not used 
     toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=1, indpb=0.2)  # Gaussian mutation
     toolbox.register("select", tools.selTournament, tournsize=3)  # Tournament selection
 

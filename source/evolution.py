@@ -186,12 +186,14 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                 # 2. Cloning: Clone the selected individuals for modification
                 offspring = list(map(toolbox.clone, offspring))
 
-                # 3. Crossover: Apply crossover to pairs of offspring
-                for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                    if np.random.rand() < 0.5:  # Apply crossover with 50% probability
-                        toolbox.mate(child1, child2)
-                        del child1.fitness.values  # Invalidate fitness of child1
-                        del child2.fitness.values  # Invalidate fitness of child2
+                # no crossover - as it didn't make any difference in the results
+                    
+                # # 3. Crossover: Apply crossover to pairs of offspring
+                # for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                #     if np.random.rand() < 0.5:  # Apply crossover with 50% probability
+                #         toolbox.mate(child1, child2)
+                #         del child1.fitness.values  # Invalidate fitness of child1
+                #         del child2.fitness.values  # Invalidate fitness of child2
 
                 # 4. Mutation: Mutate offspring with a certain probability
                 for mutant in offspring:
