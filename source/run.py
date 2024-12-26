@@ -114,9 +114,20 @@ def run():
         )
     )
 
+    current_dir = os.path.dirname(os.path.abspath(__file__)) # where run.py is located, i.e., "source" directory
+    parent_dir = os.path.abspath(os.path.join(current_dir, os.pardir)) # source's parent directory
+
     # Output directory for evolution results
-    output_dir = os.path.join("data_generated", experiment_number, dataset_name, model_name)
-    os.makedirs(output_dir, exist_ok=True)
+    output_subdir = os.path.join(
+        parent_dir,  # Move to parent directory
+        "data_generated",
+        f"Exp_{args.experiment_number}",
+        args.dataset_name,
+        args.model_name,
+        f"class_{args.target_digit_for_confidence}",
+        f"replicate_{args.replicate}"
+    )
+    os.makedirs(output_subdir, exist_ok=True)
 
     # Run evolution
     print("Running evolution...")
@@ -129,7 +140,7 @@ def run():
         target_digit_for_confidence=target_digit_for_confidence,
         target_digit_for_similarity=target_digit_for_similarity,
         similarity_metric=similarity_metric,
-        output_subdir=output_dir,
+        output_subdir=output_subdir,
         generation_interval=generation_interval,
         replicate=replicate,
         target_image = target_image, # median image for target digit - for which confidence is calculated

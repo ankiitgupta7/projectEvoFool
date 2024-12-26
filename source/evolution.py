@@ -1,6 +1,7 @@
 import os
 import csv
 import numpy as np
+import h5py
 import tensorflow as tf  # Import TensorFlow
 from deap import tools  # Import tools from DEAP
 from metrics import compute_ncc, compute_ssim
@@ -42,6 +43,56 @@ def collect_scores(individual, model, input_shape, target_image, image_for_simil
 
     return confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores
 
+def initialize_hdf5_file(file_path, image_shape):
+    """
+    Initialize an HDF5 file for saving evolved image states.
+    Args:
+        file_path (str): Path to the HDF5 file.
+        image_shape (tuple): Shape of the image array.
+    """
+    with h5py.File(file_path, "w") as hdf5_file:
+        # Create datasets for images, metrics, and generation counts
+        hdf5_file.create_dataset("images", shape=(0, *image_shape), maxshape=(None, *image_shape), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("genCount", shape=(0,), maxshape=(None,), dtype="int32", compression="gzip")  # Store generation counts
+        hdf5_file.create_dataset("fitness", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("confidence_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("confidence_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("ssim_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("ssim_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("ncc_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("ncc_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+
+def append_to_hdf5(file_path, gen, image, fitness, confidence_target, confidence_similarity, ssim_target, ssim_similarity, ncc_target, ncc_similarity):
+    """
+    Append evolved image state data to an HDF5 file.
+    Args:
+        file_path (str): Path to the HDF5 file.
+        gen (int): Generation count.
+        image (ndarray): Image array.
+        fitness (float): Fitness score.
+        confidence_target (float): Confidence for the target class.
+        confidence_similarity (float): Confidence for the similarity class.
+        ssim_target (float): SSIM score for the target class.
+        ssim_similarity (float): SSIM score for the similarity class.
+        ncc_target (float): NCC score for the target class.
+        ncc_similarity (float): NCC score for the similarity class.
+    """
+    with h5py.File(file_path, "a") as hdf5_file:
+        # Append data to each dataset
+        for key, value in {
+            "genCount": [gen],  # Generation count
+            "images": image[np.newaxis, ...],  # Add a new axis for batch dimension
+            "fitness": [fitness],
+            "confidence_target": [confidence_target],
+            "confidence_similarity": [confidence_similarity],
+            "ssim_target": [ssim_target],
+            "ssim_similarity": [ssim_similarity],
+            "ncc_target": [ncc_target],
+            "ncc_similarity": [ncc_similarity]
+        }.items():
+            dataset = hdf5_file[key]
+            dataset.resize(dataset.shape[0] + len(value), axis=0)
+            dataset[-len(value):] = value
 
 # Compute fitness based on scores
 def fitness(experiment_number, confidence_score_for_target_digit, ssim_score_similarity_class, confidence_score_for_similarity_digit):
@@ -50,11 +101,11 @@ def fitness(experiment_number, confidence_score_for_target_digit, ssim_score_sim
     """
     if experiment_number == "1": # Confidence as fitness - to see if the SSIM increases with increasing confidence for same class
         return confidence_score_for_target_digit
-    elif experiment_number == "2_1_1": # perceptible fooling 1: looks like target class but model has low confidence
+    elif experiment_number == "2_1a": # perceptible fooling 1: looks like target class but model has low confidence
         return ssim_score_similarity_class - confidence_score_for_target_digit
     # elif experiment_number == "2_1_2":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
     #     return (ssim_score_similarity_class + confidence_score_for_target_digit)/2
-    elif experiment_number == "2_1_2":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
+    elif experiment_number == "2_1b":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
         return (ssim_score_similarity_class + confidence_score_for_target_digit)/2 - (confidence_score_for_similarity_digit)/2
     elif experiment_number == "2_2":  # imperceptible fooling: does not look like target class (giberish) but model has high confidence
         return confidence_score_for_target_digit - abs(ssim_score_similarity_class)
@@ -68,6 +119,14 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
     Run the evolutionary algorithm to optimize images.
     """
     os.makedirs(output_subdir, exist_ok=True)
+    batch_dir = os.path.join(output_subdir, "batch_image_grid")
+    os.makedirs(batch_dir, exist_ok=True)
+
+    hdf5_path = os.path.join(output_subdir, "evolved_images.hdf5")
+    initialize_hdf5_file(hdf5_path, image_shape=input_shape)
+
+
+
     population = toolbox.population(n=50)
 
     # Lists to track generation-wise metrics
@@ -142,7 +201,13 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
             file.flush()
 
             # 9. Track metrics and visualize results at intervals
-            if gen % generation_interval == 0 or gen == ngen:
+            
+            if gen <= 5 * generation_interval: # 500 for sklearn dataset, 5000 for mnist dataset
+                interval = generation_interval / 20 # 5 for sklearn dataset, 50 for mnist dataset
+            else:
+                interval = generation_interval
+
+            if gen % interval == 0 or gen == ngen or fitness_score >= 0.9999:
                 generation_images.append(best_image)
                 generation_confidences_for_target.append(confidence_score_for_target_digit)
                 generation_confidences_for_similarity.append(confidence_score_for_similarity_digit)
@@ -161,7 +226,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                     generation_nccs_for_target,
                     generation_nccs_for_similarity,
                     generation_indices,
-                    output_subdir,
+                    batch_dir,
                     target_digit_for_confidence,
                     target_digit_for_similarity,
                     replicate,
@@ -181,6 +246,19 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                     replicate,
                     model_name,
                     dataset_name,
+                )
+
+                append_to_hdf5(
+                    file_path=hdf5_path,
+                    gen=gen,  # Generation count
+                    image=best_image,
+                    fitness=fitness_score,
+                    confidence_target=confidence_score_for_target_digit,
+                    confidence_similarity=confidence_score_for_similarity_digit,
+                    ssim_target=ssim_score_target_class,
+                    ssim_similarity=ssim_score_similarity_class,
+                    ncc_target=ncc_score_target_class,
+                    ncc_similarity=ncc_score_similarity_class
                 )
 
             # Optional: Terminate if fitness reaches a threshold
