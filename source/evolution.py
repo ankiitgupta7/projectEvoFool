@@ -143,7 +143,7 @@ def fitness(experiment_number, confidence_score_for_target_digit, ssim_score_sim
 
 
 # Evolutionary algorithm to optimize images
-def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_digit_for_confidence, target_digit_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, target_image, image_for_similarity_comarison, model_name, dataset_name):
+def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_digit_for_confidence, target_digit_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, target_image, image_for_similarity_comarison, model_name, dataset_name, seed):
     """
     Run the evolutionary algorithm to optimize images.
     """

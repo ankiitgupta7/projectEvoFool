@@ -31,6 +31,8 @@ def get_model(model_name, input_shape):
     """
     Returns the appropriate model based on the model_name.
     """
+
+    model_seed = 42
     if model_name == "CNN":
         return create_cnn_model(input_shape)
     elif model_name == "RNN":
@@ -38,13 +40,13 @@ def get_model(model_name, input_shape):
     elif model_name == "SVM":
         return SVC(gamma="scale", probability=True)
     elif model_name == "RF":
-        return RandomForestClassifier()
+        return RandomForestClassifier(random_state=model_seed)
     elif model_name == "GBM":
-        return GradientBoostingClassifier()
+        return GradientBoostingClassifier(random_state=model_seed)
     elif model_name == "XGB":
-        return XGBClassifier()
+        return XGBClassifier(random_state=model_seed)
     elif model_name == "MLP":
-        return MLPClassifier()
+        return MLPClassifier(random_state=model_seed)
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
@@ -259,8 +261,8 @@ def save_best_images_per_class(X_data, probs, y_data, data_type, model_name, out
 
 # Run the model processing pipeline
 if __name__ == "__main__":
-    dataset_names = ["sklearnDigits", "mnistDigits", "mnistFashion", "CIFAR10", "CIFAR100"]  # Replace with your dataset names
-    model_names = ["CNN", "RNN", "SVM", "RF", "GBM", "XGB", "MLP"]  # List of models to test
+    dataset_names = ["sklearnDigits", "mnistDigits", "mnistFashion"]  # Replace with your dataset names
+    model_names = ["SVM", "RF", "GBM", "XGB", "MLP", "CNN", "RNN"]  # List of models to test
 
     for dataset_name in dataset_names:
         for model_name in model_names:

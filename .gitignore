@@ -4,4 +4,6 @@ CIFAR100
 CIFAR10
 mnistFashion
 mnistDigits
+model_info_old
+model_info
 *.pyc

@@ -9,6 +9,67 @@ from deap import base, creator, tools
 
 # runs with the following example command: python run.py 3 sklearnDigits SVM 5 5 SSIM 50 300 10000000
 
+def generate_seed(exp_number, dataset_name, similarity_metric, target_conf, target_sim, replicate):
+    """
+    Generate a unique seed based on experiment parameters.
+
+    Parameters:
+    - exp_number (str): Experiment number (e.g., "1", "2_1a", "3").
+    - dataset_name (str): Dataset name (e.g., "sklearnDigits", "mnistDigits").
+    - similarity_metric (str): Similarity metric (e.g., "SSIM", "NCC").
+    - target_conf (int): Target digit for confidence (0-99).
+    - target_sim (int): Target digit for similarity (0-99).
+    - replicate (int): Replicate number (1-30).
+
+    Returns:
+    - int: A unique seed for the given parameters.
+    """
+    # Experiment base values
+    exp_base = {
+        "1": 100,
+        "2_1a": 211,
+        "2_1b": 212,
+        "2_2": 220,
+        "3": 300
+    }
+
+    # Dataset base values (single-digit representation)
+    dataset_base = {
+        "sklearnDigits": 1,
+        "mnistDigits": 2,
+        "mnistFashion": 3,
+        "CIFAR10": 4,
+        "CIFAR100": 5
+    }
+
+    # Similarity metric values
+    similarity_metric_base = {
+        "SSIM": 1,
+        "NCC": 2,
+        "LPIPS": 3,
+        "PSNR": 4
+    }
+
+    # Get base values
+    exp_value = exp_base.get(exp_number, 0)
+    dataset_value = dataset_base.get(dataset_name, 0)
+    sim_metric_value = similarity_metric_base.get(similarity_metric, 0)
+
+    if exp_value == 0:
+        raise ValueError(f"Unknown experiment number: {exp_number}")
+    if dataset_value == 0:
+        raise ValueError(f"Unknown dataset name: {dataset_name}")
+    if sim_metric_value == 0:
+        raise ValueError(f"Unknown similarity metric: {similarity_metric}")
+    if target_conf < 0 or target_conf > 99:
+        raise ValueError(f"Target digit for confidence must be between 0 and 99, got {target_conf}")
+    if target_sim < 0 or target_sim > 99:
+        raise ValueError(f"Target digit for similarity must be between 0 and 99, got {target_sim}")
+
+    # Generate the seed
+    seed = int(f"{exp_value}{dataset_value}{sim_metric_value}{target_conf:02d}{target_sim:02d}{replicate:02d}")
+    return seed
+
 def run():
     # Command-line argument parsing
     parser = argparse.ArgumentParser(description="Run machine learning models on various datasets.")
@@ -36,6 +97,9 @@ def run():
     replicate = args.replicate
     ngen = args.ngen
 
+    # Generate a unique seed for the experiment
+    seed = generate_seed(experiment_number, dataset_name, similarity_metric, target_digit_for_confidence, target_digit_for_similarity, replicate)
+    print(f"Seed Generated for this experiment: {seed}")
 
     # Load dataset from pickle file
     print(f"Loading dataset: {dataset_name}")
@@ -147,6 +211,7 @@ def run():
         image_for_similarity_comarison=image_for_similarity_comarison, # median image for similarity digit - for which similarity is calculated
         model_name=model_name,
         dataset_name=dataset_name,
+        seed=seed,
     )
 
 
