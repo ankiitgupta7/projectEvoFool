@@ -44,7 +44,7 @@ def get_model(model_name, input_shape):
     elif model_name == "XGB":
         return XGBClassifier()
     elif model_name == "MLP":
-        return MLPClassifier(hidden_layer_sizes=(100,), max_iter=500)
+        return MLPClassifier()
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
