@@ -1,5 +1,6 @@
 import os
 import argparse
+import random
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -101,6 +102,11 @@ def run():
     seed = generate_seed(experiment_number, dataset_name, similarity_metric, target_digit_for_confidence, target_digit_for_similarity, replicate)
     print(f"Seed Generated for this experiment: {seed}")
 
+    # Set seed for reproducibility
+    np.random.seed(seed % (2**32))  # Ensure NumPy seed is within range
+    tf.random.set_seed(seed)        # TensorFlow operations
+    random.seed(seed)               # Python's random operations
+
     # Load dataset from pickle file
     print(f"Loading dataset: {dataset_name}")
     X_train, X_test, y_train, y_test, input_shape, num_classes = load_saved_dataset(dataset_name)
@@ -159,7 +165,8 @@ def run():
     toolbox = base.Toolbox()
 
     # Attribute generator for individuals
-    toolbox.register("attr_float", np.random.rand)
+    toolbox.register("attr_float", lambda: random.uniform(0, 1))  # Use Python's random
+
 
     # Individual and population initialization
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, np.prod(input_shape))

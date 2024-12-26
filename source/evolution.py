@@ -8,6 +8,7 @@ from metrics import compute_ncc, compute_ssim
 from visualisation import render_images_in_batches, plot_scores_vs_generations
 import json
 import time
+import random
 from tqdm import tqdm
 
 def save_run_summary(output_subdir, early_stop_gen, experiment_details, tqdm_details):
@@ -150,6 +151,12 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
     start_time = time.time()
     early_stop_gen = None
 
+    # Set seed for reproducibility
+    np.random.seed(seed % (2**32))  # Ensure NumPy seed is within range
+    tf.random.set_seed(seed)        # TensorFlow operations
+    random.seed(seed)               # Python's random operations
+
+    # Create output directories
     os.makedirs(output_subdir, exist_ok=True)
     batch_dir = os.path.join(output_subdir, "batch_image_grid")
     os.makedirs(batch_dir, exist_ok=True)
@@ -197,7 +204,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
 
                 # 4. Mutation: Mutate offspring with a certain probability
                 for mutant in offspring:
-                    if np.random.rand() < 0.2:  # Mutation probability
+                    if random.random() < 0.2:  # Mutation probability
                         toolbox.mutate(mutant)
                         del mutant.fitness.values  # Invalidate fitness of mutant
 
