@@ -275,6 +275,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                         target_digit_for_confidence,
                         target_digit_for_similarity,
                         replicate,
+                        experiment_number,
                     )
 
                     plot_scores_vs_generations(
@@ -291,6 +292,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                         replicate,
                         model_name,
                         dataset_name,
+                        experiment_number,
                     )
 
                     append_to_hdf5(
@@ -333,6 +335,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
         "dataset_name": dataset_name,
         "replicate": replicate,
         "generation_interval": generation_interval,
+        "seed": seed,
     }
     save_run_summary(output_subdir, early_stop_gen, experiment_details, tqdm_details)
 
