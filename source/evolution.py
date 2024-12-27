@@ -75,7 +75,7 @@ def collect_scores(individual, model, input_shape, target_image, image_for_simil
 
 def initialize_hdf5_file(file_path, image_shape):
     """
-    Initialize an HDF5 file for saving evolved image states.
+    Initialize an HDF5 file for saving evolved image states and final population.
     Args:
         file_path (str): Path to the HDF5 file.
         image_shape (tuple): Shape of the image array.
@@ -83,7 +83,7 @@ def initialize_hdf5_file(file_path, image_shape):
     with h5py.File(file_path, "w") as hdf5_file:
         # Create datasets for images, metrics, and generation counts
         hdf5_file.create_dataset("images", shape=(0, *image_shape), maxshape=(None, *image_shape), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("genCount", shape=(0,), maxshape=(None,), dtype="int32", compression="gzip")  # Store generation counts
+        hdf5_file.create_dataset("genCount", shape=(0,), maxshape=(None,), dtype="int32", compression="gzip")
         hdf5_file.create_dataset("fitness", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
         hdf5_file.create_dataset("confidence_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
         hdf5_file.create_dataset("confidence_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
@@ -91,6 +91,14 @@ def initialize_hdf5_file(file_path, image_shape):
         hdf5_file.create_dataset("ssim_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
         hdf5_file.create_dataset("ncc_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
         hdf5_file.create_dataset("ncc_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
+
+        # Placeholder for final population (empty by default)
+        hdf5_file.create_dataset("final_population", shape=(0, 0), maxshape=(None, None), dtype="float32", compression="gzip")
+        
+        # Initialize final_genCount with a default value
+        hdf5_file.attrs["final_genCount"] = -1  # Use -1 to indicate no generation saved yet
+
+    print(f"HDF5 file initialized: {file_path}")
 
 def append_to_hdf5(file_path, gen, image, fitness, confidence_target, confidence_similarity, ssim_target, ssim_similarity, ncc_target, ncc_similarity):
     """
@@ -110,8 +118,8 @@ def append_to_hdf5(file_path, gen, image, fitness, confidence_target, confidence
     with h5py.File(file_path, "a") as hdf5_file:
         # Append data to each dataset
         for key, value in {
-            "genCount": [gen],  # Generation count
-            "images": image[np.newaxis, ...],  # Add a new axis for batch dimension
+            "genCount": [gen],
+            "images": image[np.newaxis, ...],
             "fitness": [fitness],
             "confidence_target": [confidence_target],
             "confidence_similarity": [confidence_similarity],
@@ -123,6 +131,27 @@ def append_to_hdf5(file_path, gen, image, fitness, confidence_target, confidence
             dataset = hdf5_file[key]
             dataset.resize(dataset.shape[0] + len(value), axis=0)
             dataset[-len(value):] = value
+
+
+def save_final_population_to_hdf5(file_path, population, gen):
+    """
+    Save the final generation's population and generation count to an existing HDF5 file.
+    """
+    with h5py.File(file_path, "a") as hdf5_file:
+        # Convert population to NumPy array
+        population_data = np.array([list(ind) for ind in population])
+
+        # Save or update the final_population dataset
+        if "final_population" in hdf5_file:
+            hdf5_file["final_population"].resize(population_data.shape)
+            hdf5_file["final_population"][:] = population_data
+        else:
+            hdf5_file.create_dataset("final_population", data=population_data, compression="gzip")
+
+        # Update the final_genCount attribute
+        hdf5_file.attrs["final_genCount"] = gen  # Replace placeholder with actual generation count
+
+    print(f"Final population and generation count saved to HDF5: {file_path}")
 
 # Compute fitness based on scores
 def fitness(experiment_number, confidence_score_for_target_digit, ssim_score_similarity_class, confidence_score_for_similarity_digit):
@@ -308,10 +337,15 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                         ncc_similarity=ncc_score_similarity_class
                     )
 
+                    # Save final population of images if at the last generation or early stop condition
+                    if gen == ngen or fitness_score >= 0.9999:
+                        save_final_population_to_hdf5(hdf5_path, population, gen)
+
                 # Optional: Terminate if fitness reaches a threshold
                 if fitness_score >= 0.9999:
                     tqdm.write(f"Stopping early at generation {gen} as fitness threshold reached.")
                     early_stop_gen = gen
+
                     break
 
         finally:
@@ -324,7 +358,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
             }
             progress_bar.close()
 
-     # Total runtime and save summary
+    # Total runtime and save summary
     total_time = time.time() - start_time
     experiment_details = {
         "experiment_number": experiment_number,

@@ -7,3 +7,4 @@ mnistDigits
 model_info_old
 model_info
 *.pyc
+output*
