@@ -18,13 +18,13 @@ conda activate pyEnv3.10  # Activate the Conda environment
 export PATH=~/miniforge3/envs/pyEnv3.10/bin:$PATH
 
 # Define fixed parameters
-experiment="1"
-dataset="sklearnDigits"
-models=("SVM" "RF" "GBM" "XGB" "MLP" "CNN" "RNN")
+experiment="2_2"
+dataset="mnistDigits"
+models=("GBM" "XGB" "MLP" "SVM" "RF" "CNN" "RNN")
 digits=(0 1 2 3 4 5 6 7 8 9)
 metric="SSIM"
-interval=100
-generations=100000
+interval=1000
+generations=1000000
 
 # Configurable replicate range
 replicates_per_job=10          # Number of replicates per submission
