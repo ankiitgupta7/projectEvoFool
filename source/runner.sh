@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH --output=logs/exp1_%A_%a.out  # Output logs
 #SBATCH --error=logs/exp1_%A_%a.err   # Error logs
-#SBATCH --time=15:00:00               # Increased time for longer runs
+#SBATCH --time=96:00:00               # Increased time for longer runs
 #SBATCH --nodes=1                     # Single node
 #SBATCH --ntasks=1                    # One task per job
-#SBATCH --cpus-per-task=4             # Number of CPUs per task
-#SBATCH --mem=8G                      # Memory per task
+#SBATCH --cpus-per-task=1             # Number of CPUs per task
+#SBATCH --mem=4G                      # Memory per task
 #SBATCH --array=1-700                 # Total combinations: 7 models × 10 digits × 10 replicates
-#SBATCH --mail-type=END,FAIL          # Notifications for job end or fail
-#SBATCH --mail-user=guptaa23@msu.edu  # Your email
+
 
 # Initialize Conda
 source ~/miniforge3/etc/profile.d/conda.sh
