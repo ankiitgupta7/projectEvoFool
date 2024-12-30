@@ -281,7 +281,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                 else:
                     interval = generation_interval
 
-                if gen % interval == 0 or gen == ngen or fitness_score >= 0.9999:
+                if gen % interval == 0 or gen == ngen:
                     generation_images.append(best_image)
                     generation_confidences_for_target.append(confidence_score_for_target_digit)
                     generation_confidences_for_similarity.append(confidence_score_for_similarity_digit)
@@ -338,15 +338,15 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                     )
 
                     # Save final population of images if at the last generation or early stop condition
-                    if gen == ngen or fitness_score >= 0.9999:
+                    if gen == ngen:
                         save_final_population_to_hdf5(hdf5_path, population, gen)
 
                 # Optional: Terminate if fitness reaches a threshold
-                if fitness_score >= 0.9999:
-                    tqdm.write(f"Stopping early at generation {gen} as fitness threshold reached.")
-                    early_stop_gen = gen
+                # if fitness_score >= 0.9999:
+                #     tqdm.write(f"Stopping early at generation {gen} as fitness threshold reached.")
+                #     early_stop_gen = gen
 
-                    break
+                #     break
 
         finally:
         # Extract essential tqdm details
