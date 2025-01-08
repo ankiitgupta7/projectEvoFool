@@ -1,6 +1,6 @@
-data_generated
-Test
-dataset_info
-model_info
+data_generated/
+Test/
+dataset_info/
+model_info/
 *.pyc
-output*
+output*/
