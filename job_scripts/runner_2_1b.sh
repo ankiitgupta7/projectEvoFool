@@ -17,15 +17,15 @@
 # sbatch runner.sh <experiment> <dataset> <interval> <generations> [replicate_start]
 #
 # Arguments:
-# 1. <experiment>: Experiment number (1, 2_1a, 3)
+# 1. <experiment>: Experiment number (2_1b)
 # 2. <dataset>: Dataset name (e.g., mnistDigits, sklearnDigits, mnistFashion)
 # 3. <interval>: Interval for saving generation images (100 for sklearnDigits, 1000 for others)
 # 4. <generations>: Number of generations for evolution (50000 for mnistDigits, 100000 for others)
 # 5. [replicate_start]: Starting replicate index (optional, default is 1, which will cover 10 (1 to 10) replicates)
 #
 # Example:
-# sbatch runner.sh 1 mnistDigits 1000 100000 11
-# This runs experiment 1 on the mnistDigits dataset, with an interval of 1000,
+# sbatch runner.sh 2_1b mnistDigits 1000 100000 11
+# This runs experiment 2_1b on the mnistDigits dataset, with an interval of 1000,
 # 100000 generations, and replicates starting from 11 to 20.
 
 # As we are doing 30 replicates for each dataset, model and class, 
@@ -44,6 +44,7 @@ export PATH=~/miniforge3/envs/pyEnv3.10/bin:$PATH
 models=("XGB" "MLP" "SVM" "RF" "CNN" "RNN")
 classes=(0 1 2 3 4 5 6 7 8 9)
 metric="SSIM"
+random_seed=42  # Seed for reproducibility
 
 # Input Parameters
 experiment=${1:?"Experiment number is required"}
@@ -52,6 +53,16 @@ interval=${3:?"Interval is required"}
 generations=${4:?"Number of generations is required"}
 replicate_start=${5:-1}
 
+# Generate all class pairs and select 10 random combinations
+python - <<EOF
+import random
+random.seed(${random_seed})
+classes = ${classes}
+all_pairs = [(i, j) for i in classes for j in classes if i != j]
+selected_pairs = random.sample(all_pairs, 10)
+print("\n".join([f"{pair[0]} {pair[1]}" for pair in selected_pairs]))
+EOF > selected_pairs.txt
+
 # Derived Parameters
 replicates_per_job=10
 replicate_end=$((replicate_start + replicates_per_job - 1))
@@ -59,35 +70,37 @@ task_id=$SLURM_ARRAY_TASK_ID
 
 # Calculate Indices
 num_models=${#models[@]}
-num_classes=${#classes[@]}
-total_jobs=$((num_models * num_classes * replicates_per_job))
+total_jobs=$((num_models * replicates_per_job))
 
 if (( task_id > total_jobs )); then
     echo "Task ID $task_id exceeds total jobs $total_jobs. Exiting."
     exit 1
 fi
 
-model_index=$(( (task_id - 1) / (num_classes * replicates_per_job) % num_models ))
-class_index=$(( (task_id - 1) / replicates_per_job % num_classes ))
+model_index=$(( (task_id - 1) / replicates_per_job % num_models ))
 replicate_offset=$(( (task_id - 1) % replicates_per_job ))
 replicate=$((replicate_start + replicate_offset))
 
 model=${models[$model_index]}
-class=${classes[$class_index]}
+
+# Assign class pairs dynamically
+target_class=$(sed -n "${task_id}p" selected_pairs.txt | cut -d' ' -f1)
+non_target_class=$(sed -n "${task_id}p" selected_pairs.txt | cut -d' ' -f2)
 
 # Define a unique job name
-job_name="e${experiment}_${dataset}_m${model}_c${class}_r${replicate}_t${task_id}"
+job_name="e${experiment}_${dataset}_m${model}_tc${target_class}_ntc${non_target_class}_r${replicate}_t${task_id}"
 
 # Update SLURM's job name dynamically
 scontrol update jobid=$SLURM_JOB_ID JobName="$job_name"
 
 # Output Directory
-output_dir="/mnt/home/guptaa23/Active/EPIC_fool/projectEvoFool/output/exp${experiment}_${dataset}${model}_${class}_rep${replicate}_job${SLURM_JOB_ID}"
+output_dir="/mnt/home/guptaa23/Active/EPIC_fool/projectEvoFool/output/exp${experiment}_${dataset}${model}_tc${target_class}_ntc${non_target_class}_rep${replicate}_job${SLURM_JOB_ID}"
 mkdir -p "$output_dir"
 
 # Debugging Info
 echo "Task ID: $task_id, Job ID: $SLURM_JOB_ID"
-echo "Experiment: $experiment, Dataset: $dataset, Model: $model, Class: $class, Replicate: $replicate"
+echo "Experiment: $experiment, Dataset: $dataset, Model: $model"
+echo "Target Class: $target_class, Non-Target Class: $non_target_class, Replicate: $replicate"
 echo "Interval: $interval, Generations: $generations"
 echo "Output Directory: $output_dir"
 env | grep SLURM
@@ -97,4 +110,4 @@ cd /mnt/home/guptaa23/Active/EPIC_fool/projectEvoFool/source
 
 # Run Python Script
 exec > "$output_dir/script_output.log" 2> "$output_dir/script_error.log"
-python run.py "$experiment" "$dataset" "$model" "$class" "$class" "$metric" "$interval" "$replicate" "$generations"
+python run.py "$experiment" "$dataset" "$model" "$target_class" "$non_target_class" "$metric" "$interval" "$replicate" "$generations"
