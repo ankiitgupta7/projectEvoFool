@@ -34,9 +34,9 @@ def load_saved_dataset(dataset_name):
     return X_train, X_test, y_train, y_test, input_shape, num_classes
 
 
-def load_median_image(dataset_name, target_digit):
+def load_median_image(dataset_name, target_class):
     """
-    Load the median image for a specific class (digit) from the saved pickle file.
+    Load the median image for a specific class from the saved pickle file.
     """
     # Path to the median images pickle file
     median_pkl_path = os.path.join("dataset_info", dataset_name, "aggregated_images", "median", "pkl", "median_images.pkl")
@@ -49,7 +49,7 @@ def load_median_image(dataset_name, target_digit):
 
     # As median images were saved as a dictionary of images with image class name as key
     if dataset_name == "mnistDigits" or dataset_name == "sklearnDigits":
-        key = target_digit  # e.g., 0..9
+        key = target_class  # e.g., 0..9
     elif dataset_name == "mnistFashion":
         # Convert 0..9 -> "T-shirt_or_Top", "Trouser", etc.
         fashion_mnist_classnames = [
@@ -64,27 +64,27 @@ def load_median_image(dataset_name, target_digit):
             'Bag',
             'Ankle boot'
         ]
-        key = fashion_mnist_classnames[target_digit]
+        key = fashion_mnist_classnames[target_class]
 
     # Load the pickle file
     with open(median_pkl_path, "rb") as file:
         median_images = pickle.load(file)
     
-    # Validate the target digit
+    # Validate the target class
     if str(key) not in median_images:
-        raise ValueError(f"Target digit {key} not found in the median images file.")
+        raise ValueError(f"Target class {key} not found in the median images file.")
     
     return median_images[str(key)]
 
 
-def load_best_image(dataset_name, model_name, target_digit, data_type):
+def load_best_image(dataset_name, model_name, target_class, data_type):
     """
-    Unpickle and return the best image saved for the specified dataset, model, and target digit.
+    Unpickle and return the best image saved for the specified dataset, model, and target class.
 
     Parameters:
     - dataset_name (str): The name of the dataset (e.g., "sklearnDigits").
     - model_name (str): The name of the model (e.g., "CNN", "MLP").
-    - target_digit (int): The target class/digit for which to load the best image.
+    - target_class (int): The target class for which to load the best image.
     - data_type (str): "train" or "test" to specify whether to load from training or testing data.
 
     Returns:
@@ -92,11 +92,11 @@ def load_best_image(dataset_name, model_name, target_digit, data_type):
     """
     # Define the path to the best image pickle file
     image_dir = os.path.join("model_info", dataset_name, model_name, "best_images", data_type, "pkl")
-    pkl_path = os.path.join(image_dir, f"class_{target_digit}_best_image.pkl")
+    pkl_path = os.path.join(image_dir, f"class_{target_class}_best_image.pkl")
 
     # Check if the file exists
     if not os.path.exists(pkl_path):
-        raise FileNotFoundError(f"Best image pickle not found for class {target_digit} at {pkl_path}")
+        raise FileNotFoundError(f"Best image pickle not found for class {target_class} at {pkl_path}")
 
     # Load the best image data
     with open(pkl_path, "rb") as file:
@@ -104,7 +104,7 @@ def load_best_image(dataset_name, model_name, target_digit, data_type):
 
     # Verify the structure of the loaded data
     if not all(key in best_image_data for key in ["image", "confidence", "class"]):
-        raise ValueError(f"Best image pickle for class {target_digit} is missing required keys.")
+        raise ValueError(f"Best image pickle for class {target_class} is missing required keys.")
 
     # Return the best image data
     return best_image_data

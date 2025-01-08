@@ -38,7 +38,7 @@ def save_run_summary(output_subdir, early_stop_gen, experiment_details, tqdm_det
 
 
 # Collect scores (confidence, SSIM, NCC)
-def collect_scores(individual, model, input_shape, target_image, image_for_similarity_comarison, target_digit_for_confidence, target_digit_for_similarity):
+def collect_scores(individual, model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence, target_class_for_similarity):
     """
     Compute confidence, SSIM, and NCC scores for a given individual.
     """
@@ -57,9 +57,9 @@ def collect_scores(individual, model, input_shape, target_image, image_for_simil
         image_expanded = np.array(individual).reshape(1, -1)
         probabilities = model.predict_proba(image_expanded)
 
-    confidence_score_for_target_digit = probabilities[0][target_digit_for_confidence]
+    confidence_score_for_target_class = probabilities[0][target_class_for_confidence]
 
-    confidence_score_for_similarity_digit = probabilities[0][target_digit_for_similarity]
+    confidence_score_for_similarity_class = probabilities[0][target_class_for_similarity]
 
     confidence_scores = probabilities[0]
 
@@ -71,7 +71,7 @@ def collect_scores(individual, model, input_shape, target_image, image_for_simil
     ncc_score_similarity_class = compute_ncc(image, image_for_similarity_comarison)
     ncc_score_target_class = compute_ncc(image, target_image)
 
-    return confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores
+    return confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores
 
 def initialize_hdf5_file(file_path, image_shape):
     """
@@ -154,26 +154,26 @@ def save_final_population_to_hdf5(file_path, population, gen):
     print(f"Final population and generation count saved to HDF5: {file_path}")
 
 # Compute fitness based on scores
-def fitness(experiment_number, confidence_score_for_target_digit, ssim_score_similarity_class, confidence_score_for_similarity_digit):
+def fitness(experiment_number, confidence_score_for_target_class, ssim_score_similarity_class, confidence_score_for_similarity_class):
     """
     Compute the fitness of an individual based on the experiment number.
     """
     if experiment_number == "1": # Confidence as fitness - to see if the SSIM increases with increasing confidence for same class
-        return confidence_score_for_target_digit
+        return confidence_score_for_target_class
     elif experiment_number == "2_1a": # perceptible fooling 1: looks like target class but model has low confidence
-        return ssim_score_similarity_class - confidence_score_for_target_digit
+        return ssim_score_similarity_class - confidence_score_for_target_class
     # elif experiment_number == "2_1_2":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
-    #     return (ssim_score_similarity_class + confidence_score_for_target_digit)/2
+    #     return (ssim_score_similarity_class + confidence_score_for_target_class)/2
     elif experiment_number == "2_1b":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
-        return (ssim_score_similarity_class + confidence_score_for_target_digit)/2 - (confidence_score_for_similarity_digit)/2
+        return (ssim_score_similarity_class + confidence_score_for_target_class)/2 - (confidence_score_for_similarity_class)/2
     elif experiment_number == "2_2":  # imperceptible fooling: does not look like target class (giberish) but model has high confidence
-        return confidence_score_for_target_digit - abs(ssim_score_similarity_class)
+        return confidence_score_for_target_class - abs(ssim_score_similarity_class)
     elif experiment_number == "3":  # SSIM as fitness - to see if the confidence increases with increasing SSIM
         return ssim_score_similarity_class
 
 
 # Evolutionary algorithm to optimize images
-def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_digit_for_confidence, target_digit_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, target_image, image_for_similarity_comarison, model_name, dataset_name, seed):
+def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_class_for_confidence, target_class_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, target_image, image_for_similarity_comarison, model_name, dataset_name, seed):
     """
     Run the evolutionary algorithm to optimize images.
     """
@@ -208,7 +208,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
     generation_indices = []
 
     # CSV file to save scores
-    scores_csv_path = os.path.join(output_subdir, f'scores_digit_{target_digit_for_confidence}_rep{replicate}.csv')
+    scores_csv_path = os.path.join(output_subdir, f'scores_class_{target_class_for_confidence}_rep{replicate}.csv')
     with open(scores_csv_path, mode='w', newline='') as file:
         writer = csv.writer(file)
         # Initialize tqdm progress bar
@@ -245,10 +245,10 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                 # 6. Evaluation: Evaluate the fitness of individuals with invalid fitness
                 invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
                 for ind in invalid_ind:
-                    confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores = collect_scores(
-                        ind, model, input_shape, target_image, image_for_similarity_comarison, target_digit_for_confidence, target_digit_for_similarity
+                    confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores = collect_scores(
+                        ind, model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence, target_class_for_similarity
                     )
-                    fitness_score = fitness(experiment_number, confidence_score_for_target_digit, ssim_score_similarity_class, confidence_score_for_similarity_digit)
+                    fitness_score = fitness(experiment_number, confidence_score_for_target_class, ssim_score_similarity_class, confidence_score_for_similarity_class)
                     ind.fitness.values = (fitness_score,)
 
                 # 7. Replacement: Replace the old population with the new offspring
@@ -257,11 +257,11 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                 # 8. Get the best individual of the generation
                 best_ind = tools.selBest(population, 1)[0]  # Select the best individual
                 best_image = np.array(best_ind).reshape(input_shape)
-                confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores = collect_scores(
-                    best_ind, model, input_shape, target_image, image_for_similarity_comarison, target_digit_for_confidence, target_digit_for_similarity
+                confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores = collect_scores(
+                    best_ind, model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence, target_class_for_similarity
                 )
 
-                fitness_score = fitness(experiment_number, confidence_score_for_target_digit, ssim_score_similarity_class, confidence_score_for_similarity_digit)
+                fitness_score = fitness(experiment_number, confidence_score_for_target_class, ssim_score_similarity_class, confidence_score_for_similarity_class)
 
                 # Save scores to CSV
                 if gen == 0:
@@ -270,7 +270,7 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                     writer.writerow(header)
 
                 # Write row with dynamic confidence score columns
-                row = [gen, fitness_score, confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class] + list(confidence_scores)
+                row = [gen, fitness_score, confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class] + list(confidence_scores)
                 writer.writerow(row)
                 file.flush()
 
@@ -283,8 +283,8 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
 
                 if gen % interval == 0 or gen == ngen:
                     generation_images.append(best_image)
-                    generation_confidences_for_target.append(confidence_score_for_target_digit)
-                    generation_confidences_for_similarity.append(confidence_score_for_similarity_digit)
+                    generation_confidences_for_target.append(confidence_score_for_target_class)
+                    generation_confidences_for_similarity.append(confidence_score_for_similarity_class)
                     generation_ssims_for_target.append(ssim_score_target_class)
                     generation_ssims_for_similarity.append(ssim_score_similarity_class)
                     generation_nccs_for_target.append(ncc_score_target_class)
@@ -301,8 +301,8 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                         generation_nccs_for_similarity,
                         generation_indices,
                         batch_dir,
-                        target_digit_for_confidence,
-                        target_digit_for_similarity,
+                        target_class_for_confidence,
+                        target_class_for_similarity,
                         replicate,
                         experiment_number,
                     )
@@ -316,8 +316,8 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                         generation_nccs_for_target,
                         generation_nccs_for_similarity,
                         output_subdir,
-                        target_digit_for_confidence,
-                        target_digit_for_similarity,
+                        target_class_for_confidence,
+                        target_class_for_similarity,
                         replicate,
                         model_name,
                         dataset_name,
@@ -329,8 +329,8 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
                         gen=gen,  # Generation count
                         image=best_image,
                         fitness=fitness_score,
-                        confidence_target=confidence_score_for_target_digit,
-                        confidence_similarity=confidence_score_for_similarity_digit,
+                        confidence_target=confidence_score_for_target_class,
+                        confidence_similarity=confidence_score_for_similarity_class,
                         ssim_target=ssim_score_target_class,
                         ssim_similarity=ssim_score_similarity_class,
                         ncc_target=ncc_score_target_class,
@@ -362,8 +362,8 @@ def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_d
     total_time = time.time() - start_time
     experiment_details = {
         "experiment_number": experiment_number,
-        "target_digit_for_confidence": target_digit_for_confidence,
-        "target_digit_for_similarity": target_digit_for_similarity,
+        "target_class_for_confidence": target_class_for_confidence,
+        "target_class_for_similarity": target_class_for_similarity,
         "similarity_metric": similarity_metric,
         "model_name": model_name,
         "dataset_name": dataset_name,

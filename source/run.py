@@ -18,8 +18,8 @@ def generate_seed(exp_number, dataset_name, similarity_metric, target_conf, targ
     - exp_number (str): Experiment number (e.g., "1", "2_1a", "3").
     - dataset_name (str): Dataset name (e.g., "sklearnDigits", "mnistDigits").
     - similarity_metric (str): Similarity metric (e.g., "SSIM", "NCC").
-    - target_conf (int): Target digit for confidence (0-99).
-    - target_sim (int): Target digit for similarity (0-99).
+    - target_conf (int): Target class for confidence (0-99).
+    - target_sim (int): Target class for similarity (0-99).
     - replicate (int): Replicate number (1-30).
 
     Returns:
@@ -63,9 +63,9 @@ def generate_seed(exp_number, dataset_name, similarity_metric, target_conf, targ
     if sim_metric_value == 0:
         raise ValueError(f"Unknown similarity metric: {similarity_metric}")
     if target_conf < 0 or target_conf > 99:
-        raise ValueError(f"Target digit for confidence must be between 0 and 99, got {target_conf}")
+        raise ValueError(f"Target class for confidence must be between 0 and 99, got {target_conf}")
     if target_sim < 0 or target_sim > 99:
-        raise ValueError(f"Target digit for similarity must be between 0 and 99, got {target_sim}")
+        raise ValueError(f"Target class for similarity must be between 0 and 99, got {target_sim}")
 
     # Generate the seed
     seed = int(f"{exp_value}{dataset_value}{sim_metric_value}{target_conf:02d}{target_sim:02d}{replicate:02d}")
@@ -77,8 +77,8 @@ def run():
     parser.add_argument("experiment_number", type=str, help="Experiment number (e.g., 1, 2_1_1, 2_1_2, 2_2, 3)")
     parser.add_argument("dataset_name", type=str, help="Dataset name (e.g., sklearnDigits, mnistDigits, mnistFashion, CIFAR10, CIFAR100)")
     parser.add_argument("model_name", type=str, help="Model name (e.g., SVM, RF, CNN, RNN)")
-    parser.add_argument("target_digit_for_confidence", type=int, help="Target digit for model confidence")
-    parser.add_argument("target_digit_for_similarity", type=int, help="Target digit for similarity comparison")
+    parser.add_argument("target_class_for_confidence", type=int, help="Target class for model confidence")
+    parser.add_argument("target_class_for_similarity", type=int, help="Target class for similarity comparison")
     parser.add_argument("similarity_metric", type=str, help="Similarity metric to use for evaluation (e.g., SSIM, NCC, LPIPS, PSNR)")
     parser.add_argument("gen_interval", type=int, help="Interval for saving generation images")
     parser.add_argument("replicate", type=int, help="Replicate index")
@@ -91,15 +91,15 @@ def run():
     experiment_number = args.experiment_number
     dataset_name = args.dataset_name
     model_name = args.model_name
-    target_digit_for_confidence = args.target_digit_for_confidence
-    target_digit_for_similarity = args.target_digit_for_similarity
+    target_class_for_confidence = args.target_class_for_confidence
+    target_class_for_similarity = args.target_class_for_similarity
     similarity_metric = args.similarity_metric
     generation_interval = args.gen_interval
     replicate = args.replicate
     ngen = args.ngen
 
     # Generate a unique seed for the experiment
-    seed = generate_seed(experiment_number, dataset_name, similarity_metric, target_digit_for_confidence, target_digit_for_similarity, replicate)
+    seed = generate_seed(experiment_number, dataset_name, similarity_metric, target_class_for_confidence, target_class_for_similarity, replicate)
     print(f"Seed Generated for this experiment: {seed}")
 
     # Set seed for reproducibility
@@ -119,25 +119,25 @@ def run():
     print(f"Number of classes: {num_classes}")
 
 
-    # Load median image for the target digit
-    median_image_similarity_class = load_median_image(dataset_name, target_digit_for_similarity)
-    median_image_target_class = load_median_image(dataset_name, target_digit_for_confidence)
+    # Load median image for the target class
+    median_image_similarity_class = load_median_image(dataset_name, target_class_for_similarity)
+    median_image_target_class = load_median_image(dataset_name, target_class_for_confidence)
 
-    print(f"Median image for similarity_class {target_digit_for_similarity} loaded successfully.")
+    print(f"Median image for similarity_class {target_class_for_similarity} loaded successfully.")
     print(f"Median similarity_class image shape: {median_image_similarity_class.shape}")
 
-    print(f"Median image for target_class {target_digit_for_confidence} loaded successfully.")
+    print(f"Median image for target_class {target_class_for_confidence} loaded successfully.")
     print(f"Median target_class image shape: {median_image_target_class.shape}")
 
 
     # # Visualize the median image
     # plt.imshow(median_image_similarity_class.squeeze(), cmap="gray")
-    # plt.title(f"Median Image for Digit {target_digit_for_similarity}")
+    # plt.title(f"Median Image for class {target_class_for_similarity}")
     # plt.show()
 
 
-    # # Load the training image for which model has the highest confidence for the target digit 
-    # best_confidence_image_data = load_best_image(dataset_name, model_name, target_digit_for_similarity, "train")
+    # # Load the training image for which model has the highest confidence for the target class 
+    # best_confidence_image_data = load_best_image(dataset_name, model_name, target_class_for_similarity, "train")
     # best_confidence_image = best_confidence_image_data["image"]
     # confidence = best_confidence_image_data["confidence"]
     # class_label = best_confidence_image_data["class"]
@@ -183,8 +183,8 @@ def run():
 
     # Evaluation function
     toolbox.register("evaluate", lambda ind: (
-        lambda confidence_score_for_target_digit, confidence_score_for_similarity_digit, ssim_score, ncc_score, confidence_scores: (fitness(experiment_number, confidence_score_for_target_digit, ssim_score, confidence_score_for_similarity_digit),))(
-            *collect_scores(ind, trained_model, input_shape, target_image, image_for_similarity_comarison, target_digit_for_confidence)
+        lambda confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score, ncc_score, confidence_scores: (fitness(experiment_number, confidence_score_for_target_class, ssim_score, confidence_score_for_similarity_class),))(
+            *collect_scores(ind, trained_model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence)
         )
     )
 
@@ -198,7 +198,7 @@ def run():
         f"Exp_{args.experiment_number}",
         args.dataset_name,
         args.model_name,
-        f"class_{args.target_digit_for_confidence}",
+        f"class_{args.target_class_for_confidence}",
         f"replicate_{args.replicate}"
     )
     os.makedirs(output_subdir, exist_ok=True)
@@ -211,14 +211,14 @@ def run():
         ngen=ngen,
         model=trained_model,
         input_shape=input_shape,
-        target_digit_for_confidence=target_digit_for_confidence,
-        target_digit_for_similarity=target_digit_for_similarity,
+        target_class_for_confidence=target_class_for_confidence,
+        target_class_for_similarity=target_class_for_similarity,
         similarity_metric=similarity_metric,
         output_subdir=output_subdir,
         generation_interval=generation_interval,
         replicate=replicate,
-        target_image = target_image, # median image for target digit - for which confidence is calculated
-        image_for_similarity_comarison=image_for_similarity_comarison, # median image for similarity digit - for which similarity is calculated
+        target_image = target_image, # median image for target class - for which confidence is calculated
+        image_for_similarity_comarison=image_for_similarity_comarison, # median image for similarity class - for which similarity is calculated
         model_name=model_name,
         dataset_name=dataset_name,
         seed=seed,
