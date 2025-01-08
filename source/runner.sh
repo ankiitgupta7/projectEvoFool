@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --output=logs/exp1_%A_%a.out  # Output logs
-#SBATCH --error=logs/exp1_%A_%a.err   # Error logs
-#SBATCH --time=20:00:00               # Increased time for longer runs
+#SBATCH --output=logs/expMNIST_%A_%a.out  # Output logs
+#SBATCH --error=logs/expMNIST_%A_%a.err   # Error logs
+#SBATCH --time=48:00:00               # Increased time for longer runs
 #SBATCH --nodes=1                     # Single node
 #SBATCH --ntasks=1                    # One task per job
 #SBATCH --cpus-per-task=1             # Number of CPUs per task
-#SBATCH --mem=8G                      # Memory per task
-#SBATCH --array=1-600                 # Total combinations: 7 models × 10 digits × 10 replicates
-#SBATCH --mail-type=END,FAIL           # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mem=4G                      # Memory per task
+#SBATCH --array=1-600                 # Total combinations: 6 models × 10 digits × 10 replicates
+#SBATCH --mail-type=END,FAIL          # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=guptaa23@msu.edu  # Your email address
 
 
@@ -20,12 +20,12 @@ export PATH=~/miniforge3/envs/pyEnv3.10/bin:$PATH
 
 # Define fixed parameters
 experiment="1"
-dataset="skearnDigits"
+dataset="mnistDigits"
 models=("XGB" "MLP" "SVM" "RF" "CNN" "RNN")
 digits=(0 1 2 3 4 5 6 7 8 9)
 metric="SSIM"
-interval=100
-generations=50000
+interval=1000
+generations=100000
 
 # Configurable replicate range
 replicates_per_job=10          # Number of replicates per submission
@@ -51,14 +51,15 @@ model=${models[$model_index]}
 digit=${digits[$digit_index]}
 
 # Create a dedicated folder for logs and outputs
-output_dir="/mnt/home/guptaa23/Active/EPIC_fool/projectEvoFool/output/exp1_${model}_${digit}_rep${replicate}"
+output_dir="/mnt/home/guptaa23/Active/EPIC_fool/projectEvoFool/output/exp${experiment}_${dataset}${model}_${digit}_rep${replicate}_job${SLURM_JOB_ID}"
 mkdir -p "$output_dir"
 
-# Set job name dynamically
-scontrol update jobid=$SLURM_JOB_ID JobName="e1_${dataset}_${model}_d${digit}_r${replicate}_${metric}_g${generations}"
+# Set a unique job name dynamically with relevant details
+scontrol update jobid=$SLURM_JOB_ID JobName="e${experiment}_${dataset}_t${task_id}_j${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
 
 # Debugging information
 echo "Task ID: $task_id"
+echo "Job ID: $SLURM_JOB_ID"
 echo "Experiment: $experiment, Dataset: $dataset, Model: $model, Digit: $digit, Replicate: $replicate"
 echo "Output Directory: $output_dir"
 
