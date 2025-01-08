@@ -75,5 +75,5 @@ for replicate in {1..30}; do
 
     # Run Python Script for each replicate
     exec > "$output_dir/script_output.log" 2> "$output_dir/script_error.log"
-    python run3.py "$experiment" "$dataset" "$class" "$class" "$metric" "$interval" "$replicate" "$generations"
+    python run.py "$experiment" "$dataset" "$class" "$class" "$metric" "$interval" "$replicate" "$generations"
 done
