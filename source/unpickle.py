@@ -41,19 +41,40 @@ def load_median_image(dataset_name, target_digit):
     # Path to the median images pickle file
     median_pkl_path = os.path.join("dataset_info", dataset_name, "aggregated_images", "median", "pkl", "median_images.pkl")
     
+    print("Median image loading from: ", median_pkl_path)
     # Check if the file exists
     if not os.path.exists(median_pkl_path):
         raise FileNotFoundError(f"Median images pickle not found at {median_pkl_path}")
     
+
+    # As median images were saved as a dictionary of images with image class name as key
+    if dataset_name == "mnistDigits" or dataset_name == "sklearnDigits":
+        key = target_digit  # e.g., 0..9
+    elif dataset_name == "mnistFashion":
+        # Convert 0..9 -> "T-shirt_or_Top", "Trouser", etc.
+        fashion_mnist_classnames = [
+            'T-shirt_or_Top',
+            'Trouser',
+            'Pullover',
+            'Dress',
+            'Coat',
+            'Sandal',
+            'Shirt',
+            'Sneaker',
+            'Bag',
+            'Ankle boot'
+        ]
+        key = fashion_mnist_classnames[target_digit]
+
     # Load the pickle file
     with open(median_pkl_path, "rb") as file:
         median_images = pickle.load(file)
     
     # Validate the target digit
-    if str(target_digit) not in median_images:
-        raise ValueError(f"Target digit {target_digit} not found in the median images file.")
+    if str(key) not in median_images:
+        raise ValueError(f"Target digit {key} not found in the median images file.")
     
-    return median_images[str(target_digit)]
+    return median_images[str(key)]
 
 
 def load_best_image(dataset_name, model_name, target_digit, data_type):
