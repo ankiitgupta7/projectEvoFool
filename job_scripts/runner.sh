@@ -28,6 +28,10 @@
 # This runs experiment 1 on the mnistDigits dataset, with an interval of 1000,
 # 100000 generations, and replicates starting from 11 to 20.
 
+# As we are doing 30 replicates for each dataset, model and class, 
+# we need host this script 3 times with different replicate_start values, i.e., 1, 11, 21
+# also, consider lowering compute time to 20 hours, and memory to 2G
+
 # Ensure required directories exist
 mkdir -p logs
 
