@@ -2,10 +2,10 @@ import os
 import csv
 import numpy as np
 import h5py
-import tensorflow as tf  # Import TensorFlow
-from deap import tools  # Import tools from DEAP
+import tensorflow as tf
 from metrics import compute_ncc, compute_ssim
 from visualisation import render_images_in_batches, plot_scores_vs_generations
+from deap import tools  # Add this import
 import json
 import time
 import random
@@ -14,13 +14,6 @@ from tqdm import tqdm
 def save_run_summary(output_subdir, early_stop_gen, experiment_details, tqdm_details):
     """
     Save a run summary file with optimized details of the completed run.
-    Args:
-        output_subdir (str): Path to the output directory.
-        ngen (int): Total generations.
-        early_stop_gen (int): Generation at which the run stopped early (or None if completed).
-        total_time (float): Total runtime in seconds.
-        experiment_details (dict): Additional details of the experiment.
-        tqdm_details (dict): Optimized tqdm progress details.
     """
     summary_path = os.path.join(output_subdir, "run_summary.json")
     summary = {
@@ -36,32 +29,24 @@ def save_run_summary(output_subdir, early_stop_gen, experiment_details, tqdm_det
     with open(summary_path, "w") as summary_file:
         json.dump(summary, summary_file, indent=4)
 
-
-# Collect scores (confidence, SSIM, NCC)
-def collect_scores(individual, model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence, target_class_for_similarity):
+def collect_scores(individual, models, input_shape, target_image, image_for_similarity_comarison):
     """
-    Compute confidence, SSIM, and NCC scores for a given individual.
+    Compute confidence scores for all models and SSIM/NCC for a given individual.
     """
     image = np.array(individual).reshape(*input_shape)
 
     if not (0 <= image.min() <= image.max() <= 1):
         raise ValueError("Image values are not normalized.")
-    if not (0 <= image_for_similarity_comarison.min() <= image_for_similarity_comarison.max() <= 1):
-        raise ValueError("Median image values are not normalized.")
 
-    # Compute confidence
-    if isinstance(model, tf.keras.Model):  # TensorFlow model check
-        image_expanded = np.array(individual).reshape(1, *input_shape, 1)
-        probabilities = model.predict(image_expanded, verbose=0)
-    else:  # Sklearn or similar model check
-        image_expanded = np.array(individual).reshape(1, -1)
-        probabilities = model.predict_proba(image_expanded)
-
-    confidence_score_for_target_class = probabilities[0][target_class_for_confidence]
-
-    confidence_score_for_similarity_class = probabilities[0][target_class_for_similarity]
-
-    confidence_scores = probabilities[0]
+    confidences = {}
+    for model_name, model in models.items():
+        if isinstance(model, tf.keras.Model):  # TensorFlow model check
+            image_expanded = image[np.newaxis, ..., np.newaxis]
+            probabilities = model.predict(image_expanded, verbose=0)
+        else:  # Sklearn or similar model check
+            image_flat = image.flatten().reshape(1, -1)
+            probabilities = model.predict_proba(image_flat)
+        confidences[model_name] = probabilities[0]
 
     # Compute SSIM
     ssim_score_similarity_class = compute_ssim(image, image_for_similarity_comarison)
@@ -71,307 +56,159 @@ def collect_scores(individual, model, input_shape, target_image, image_for_simil
     ncc_score_similarity_class = compute_ncc(image, image_for_similarity_comarison)
     ncc_score_target_class = compute_ncc(image, target_image)
 
-    return confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores
+    return confidences, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class
 
-def initialize_hdf5_file(file_path, image_shape):
-    """
-    Initialize an HDF5 file for saving evolved image states and final population.
-    Args:
-        file_path (str): Path to the HDF5 file.
-        image_shape (tuple): Shape of the image array.
-    """
-    with h5py.File(file_path, "w") as hdf5_file:
-        # Create datasets for images, metrics, and generation counts
-        hdf5_file.create_dataset("images", shape=(0, *image_shape), maxshape=(None, *image_shape), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("genCount", shape=(0,), maxshape=(None,), dtype="int32", compression="gzip")
-        hdf5_file.create_dataset("fitness", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("confidence_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("confidence_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("ssim_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("ssim_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("ncc_target", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-        hdf5_file.create_dataset("ncc_similarity", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
-
-        # Placeholder for final population (empty by default)
-        hdf5_file.create_dataset("final_population", shape=(0, 0), maxshape=(None, None), dtype="float32", compression="gzip")
-        
-        # Initialize final_genCount with a default value
-        hdf5_file.attrs["final_genCount"] = -1  # Use -1 to indicate no generation saved yet
-
-    print(f"HDF5 file initialized: {file_path}")
-
-def append_to_hdf5(file_path, gen, image, fitness, confidence_target, confidence_similarity, ssim_target, ssim_similarity, ncc_target, ncc_similarity):
-    """
-    Append evolved image state data to an HDF5 file.
-    Args:
-        file_path (str): Path to the HDF5 file.
-        gen (int): Generation count.
-        image (ndarray): Image array.
-        fitness (float): Fitness score.
-        confidence_target (float): Confidence for the target class.
-        confidence_similarity (float): Confidence for the similarity class.
-        ssim_target (float): SSIM score for the target class.
-        ssim_similarity (float): SSIM score for the similarity class.
-        ncc_target (float): NCC score for the target class.
-        ncc_similarity (float): NCC score for the similarity class.
-    """
-    with h5py.File(file_path, "a") as hdf5_file:
-        # Append data to each dataset
-        for key, value in {
-            "genCount": [gen],
-            "images": image[np.newaxis, ...],
-            "fitness": [fitness],
-            "confidence_target": [confidence_target],
-            "confidence_similarity": [confidence_similarity],
-            "ssim_target": [ssim_target],
-            "ssim_similarity": [ssim_similarity],
-            "ncc_target": [ncc_target],
-            "ncc_similarity": [ncc_similarity]
-        }.items():
-            dataset = hdf5_file[key]
-            dataset.resize(dataset.shape[0] + len(value), axis=0)
-            dataset[-len(value):] = value
-
-
-def save_final_population_to_hdf5(file_path, population, gen):
-    """
-    Save the final generation's population and generation count to an existing HDF5 file.
-    """
-    with h5py.File(file_path, "a") as hdf5_file:
-        # Convert population to NumPy array
-        population_data = np.array([list(ind) for ind in population])
-
-        # Save or update the final_population dataset
-        if "final_population" in hdf5_file:
-            hdf5_file["final_population"].resize(population_data.shape)
-            hdf5_file["final_population"][:] = population_data
-        else:
-            hdf5_file.create_dataset("final_population", data=population_data, compression="gzip")
-
-        # Update the final_genCount attribute
-        hdf5_file.attrs["final_genCount"] = gen  # Replace placeholder with actual generation count
-
-    print(f"Final population and generation count saved to HDF5: {file_path}")
-
-# Compute fitness based on scores
-def fitness(experiment_number, confidence_score_for_target_class, ssim_score_similarity_class, confidence_score_for_similarity_class):
-    """
-    Compute the fitness of an individual based on the experiment number.
-    """
-    if experiment_number == "1": # Confidence as fitness - to see if the SSIM increases with increasing confidence for same class
-        return confidence_score_for_target_class
-    elif experiment_number == "2_1a": # perceptible fooling 1: looks like target class but model has low confidence
-        return ssim_score_similarity_class - confidence_score_for_target_class
-    # elif experiment_number == "2_1_2":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
-    #     return (ssim_score_similarity_class + confidence_score_for_target_class)/2
-    elif experiment_number == "2_1b":  # perceptible fooling 2: looks like similarity class but model has high confidence for target class
-        return (ssim_score_similarity_class + confidence_score_for_target_class)/2 - (confidence_score_for_similarity_class)/2
-    elif experiment_number == "2_2":  # imperceptible fooling: does not look like target class (giberish) but model has high confidence
-        return confidence_score_for_target_class - abs(ssim_score_similarity_class)
-    elif experiment_number == "3":  # SSIM as fitness - to see if the confidence increases with increasing SSIM
-        return ssim_score_similarity_class
-
-
-# Evolutionary algorithm to optimize images
-def run_evolution(experiment_number, toolbox, ngen, model, input_shape, target_class_for_confidence, target_class_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, target_image, image_for_similarity_comarison, model_name, dataset_name, seed):
+def run_evolution(experiment_number, toolbox, ngen, trained_models, input_shape, target_class_for_confidence, target_class_for_similarity, similarity_metric, output_subdir, generation_interval, replicate, target_image, image_for_similarity_comarison, model_names, dataset_name, seed):
     """
     Run the evolutionary algorithm to optimize images.
     """
     start_time = time.time()
     early_stop_gen = None
 
-    # Set seed for reproducibility
-    np.random.seed(seed % (2**32))  # Ensure NumPy seed is within range
-    tf.random.set_seed(seed)        # TensorFlow operations
-    random.seed(seed)               # Python's random operations
+    # Set random seeds
+    np.random.seed(seed % (2**32))
+    tf.random.set_seed(seed)
+    random.seed(seed)
 
     # Create output directories
     os.makedirs(output_subdir, exist_ok=True)
     batch_dir = os.path.join(output_subdir, "batch_image_grid")
     os.makedirs(batch_dir, exist_ok=True)
 
+    # Initialize HDF5 file
     hdf5_path = os.path.join(output_subdir, "evolved_images.hdf5")
-    initialize_hdf5_file(hdf5_path, image_shape=input_shape)
-
-
+    with h5py.File(hdf5_path, "w") as hdf5_file:
+        hdf5_file.create_dataset("images", shape=(0, *input_shape), maxshape=(None, *input_shape), dtype="float32", compression="gzip")
+        hdf5_file.create_dataset("genCount", shape=(0,), maxshape=(None,), dtype="int32", compression="gzip")
+        hdf5_file.create_dataset("fitness", shape=(0,), maxshape=(None,), dtype="float32", compression="gzip")
 
     population = toolbox.population(n=50)
 
-    # Lists to track generation-wise metrics
-    generation_images = []
-    generation_confidences_for_target = []
-    generation_confidences_for_similarity = []
+    # Initialize lists to store metrics across generations
+    generation_confidences = []
     generation_ssims_for_target = []
     generation_ssims_for_similarity = []
     generation_nccs_for_target = []
     generation_nccs_for_similarity = []
-    generation_indices = []
 
-    # CSV file to save scores
+    # CSV for logging scores
     scores_csv_path = os.path.join(output_subdir, f'scores_class_{target_class_for_confidence}_rep{replicate}.csv')
     with open(scores_csv_path, mode='w', newline='') as file:
         writer = csv.writer(file)
-        # Initialize tqdm progress bar
-        progress_bar = tqdm(range(ngen + 1), desc="Evolving Generations", unit="gen", leave=False)
+        header = ["Generation"] + [f"Confidence_{model}" for model in model_names] + ["SSIM_Target", "SSIM_Similarity", "NCC_Target", "NCC_Similarity"]
+        writer.writerow(header)
 
+        progress_bar = tqdm(range(ngen + 1), desc="Evolving Generations", unit="gen")
         try:
             for gen in progress_bar:
-                # 1. Selection: Select individuals for the next generation
+                # Selection
                 offspring = toolbox.select(population, len(population))
-
-                # 2. Cloning: Clone the selected individuals for modification
                 offspring = list(map(toolbox.clone, offspring))
 
-                # no crossover - as it didn't make any difference in the results
-                    
-                # # 3. Crossover: Apply crossover to pairs of offspring
-                # for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                #     if np.random.rand() < 0.5:  # Apply crossover with 50% probability
-                #         toolbox.mate(child1, child2)
-                #         del child1.fitness.values  # Invalidate fitness of child1
-                #         del child2.fitness.values  # Invalidate fitness of child2
-
-                # 4. Mutation: Mutate offspring with a certain probability
+                # Mutation
                 for mutant in offspring:
-                    if random.random() < 0.2:  # Mutation probability
+                    if random.random() < 0.2:
                         toolbox.mutate(mutant)
-                        del mutant.fitness.values  # Invalidate fitness of mutant
+                        del mutant.fitness.values
 
-                # 5. Repair: Clamp values to ensure valid bounds
+                # Repair
                 for ind in offspring:
                     for i in range(len(ind)):
                         ind[i] = np.clip(ind[i], 0, 1)
 
-                # 6. Evaluation: Evaluate the fitness of individuals with invalid fitness
+                # Evaluation
                 invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
                 for ind in invalid_ind:
-                    confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores = collect_scores(
-                        ind, model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence, target_class_for_similarity
+                    confidences, ssim_target, ssim_similarity, ncc_target, ncc_similarity = collect_scores(
+                        ind, trained_models, input_shape, target_image, image_for_similarity_comarison
                     )
-                    fitness_score = fitness(experiment_number, confidence_score_for_target_class, ssim_score_similarity_class, confidence_score_for_similarity_class)
-                    ind.fitness.values = (fitness_score,)
+                    ind.fitness.values = (ssim_target,)  # Use SSIM as fitness
 
-                # 7. Replacement: Replace the old population with the new offspring
+                # Replace population
                 population[:] = offspring
 
-                # 8. Get the best individual of the generation
-                best_ind = tools.selBest(population, 1)[0]  # Select the best individual
-                best_image = np.array(best_ind).reshape(input_shape)
-                confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class, confidence_scores = collect_scores(
-                    best_ind, model, input_shape, target_image, image_for_similarity_comarison, target_class_for_confidence, target_class_for_similarity
+                # Log best individual of generation
+                best_ind = tools.selBest(population, 1)[0]
+                confidences, ssim_target, ssim_similarity, ncc_target, ncc_similarity = collect_scores(
+                    best_ind, trained_models, input_shape, target_image, image_for_similarity_comarison
                 )
 
-                fitness_score = fitness(experiment_number, confidence_score_for_target_class, ssim_score_similarity_class, confidence_score_for_similarity_class)
+                # Store metrics for the generation
+                generation_confidences.append([confidences[model][target_class_for_confidence] for model in model_names])
+                generation_ssims_for_target.append(ssim_target)
+                generation_ssims_for_similarity.append(ssim_similarity)
+                generation_nccs_for_target.append(ncc_target)
+                generation_nccs_for_similarity.append(ncc_similarity)
 
-                # Save scores to CSV
-                if gen == 0:
-                    # Write header with dynamic confidence score columns
-                    header = ["Generation", "Fitness", "Confidence (Target Class)", "Confidence (Similarity Class)", "SSIM (Target Class)", "SSIM (Similarity Class)", "SSIM (Target Class)", "SSIM (Similarity Class)"] + [f"Confidence_Class_{i}" for i in range(len(confidence_scores))]
-                    writer.writerow(header)
-
-                # Write row with dynamic confidence score columns
-                row = [gen, fitness_score, confidence_score_for_target_class, confidence_score_for_similarity_class, ssim_score_target_class, ssim_score_similarity_class, ncc_score_target_class, ncc_score_similarity_class] + list(confidence_scores)
+                # Save scores
+                row = [gen] + generation_confidences[-1] + [ssim_target, ssim_similarity, ncc_target, ncc_similarity]
                 writer.writerow(row)
                 file.flush()
 
-                # 9. Track metrics and visualize results at intervals
-                
-                if gen <= 5 * generation_interval: # 500 for sklearn dataset, 5000 for mnist dataset
-                    interval = generation_interval / 20 # 5 for sklearn dataset, 50 for mnist dataset
-                else:
-                    interval = generation_interval
+                # Save images and fitness to HDF5
+                with h5py.File(hdf5_path, "a") as hdf5_file:
+                    hdf5_file["images"].resize((hdf5_file["images"].shape[0] + 1), axis=0)
+                    hdf5_file["images"][-1] = np.array(best_ind).reshape(*input_shape)
+                    hdf5_file["genCount"].resize((hdf5_file["genCount"].shape[0] + 1), axis=0)
+                    hdf5_file["genCount"][-1] = gen
+                    hdf5_file["fitness"].resize((hdf5_file["fitness"].shape[0] + 1), axis=0)
+                    hdf5_file["fitness"][-1] = ssim_target
 
-                if gen % interval == 0 or gen == ngen:
-                    generation_images.append(best_image)
-                    generation_confidences_for_target.append(confidence_score_for_target_class)
-                    generation_confidences_for_similarity.append(confidence_score_for_similarity_class)
-                    generation_ssims_for_target.append(ssim_score_target_class)
-                    generation_ssims_for_similarity.append(ssim_score_similarity_class)
-                    generation_nccs_for_target.append(ncc_score_target_class)
-                    generation_nccs_for_similarity.append(ncc_score_similarity_class)
-                    generation_indices.append(gen)
-
+                # Render image grid and plot
+                if gen % generation_interval == 0 or gen == ngen:
                     render_images_in_batches(
-                        generation_images,
-                        generation_confidences_for_target,
-                        generation_confidences_for_similarity,
-                        generation_ssims_for_target,
-                        generation_ssims_for_similarity,
-                        generation_nccs_for_target,
-                        generation_nccs_for_similarity,
-                        generation_indices,
-                        batch_dir,
-                        target_class_for_confidence,
-                        target_class_for_similarity,
-                        replicate,
-                        experiment_number,
+                        images=[np.array(ind).reshape(*input_shape) for ind in population],
+                        generation_confidences=generation_confidences,
+                        generation_ssims_for_target=generation_ssims_for_target,
+                        generation_ssims_for_similarity=generation_ssims_for_similarity,
+                        generation_nccs_for_target=generation_nccs_for_target,
+                        generation_nccs_for_similarity=generation_nccs_for_similarity,
+                        indices=list(range(len(population))),
+                        output_subdir=batch_dir,
+                        target_class_for_confidence=target_class_for_confidence,
+                        replicate=replicate,
+                        experiment_number=experiment_number,
+                        model_names=model_names
                     )
 
                     plot_scores_vs_generations(
-                        generation_indices,
-                        generation_confidences_for_target,
-                        generation_confidences_for_similarity,
+                        list(range(gen + 1)),
+                        generation_confidences,
                         generation_ssims_for_target,
                         generation_ssims_for_similarity,
                         generation_nccs_for_target,
                         generation_nccs_for_similarity,
                         output_subdir,
                         target_class_for_confidence,
-                        target_class_for_similarity,
                         replicate,
-                        model_name,
-                        dataset_name,
-                        experiment_number,
+                        model_names
                     )
-
-                    append_to_hdf5(
-                        file_path=hdf5_path,
-                        gen=gen,  # Generation count
-                        image=best_image,
-                        fitness=fitness_score,
-                        confidence_target=confidence_score_for_target_class,
-                        confidence_similarity=confidence_score_for_similarity_class,
-                        ssim_target=ssim_score_target_class,
-                        ssim_similarity=ssim_score_similarity_class,
-                        ncc_target=ncc_score_target_class,
-                        ncc_similarity=ncc_score_similarity_class
-                    )
-
-                    # Save final population of images if at the last generation or early stop condition
-                    if gen == ngen:
-                        save_final_population_to_hdf5(hdf5_path, population, gen)
-
+                
                 # Optional: Terminate if fitness reaches a threshold
-                # if fitness_score >= 0.9999:
-                #     tqdm.write(f"Stopping early at generation {gen} as fitness threshold reached.")
-                #     early_stop_gen = gen
+                if ssim_target >= 0.99:
+                    tqdm.write(f"Stopping early at generation {gen} as fitness threshold reached.")
+                    early_stop_gen = gen
 
-                #     break
+                    break
 
         finally:
-        # Extract essential tqdm details
-            tqdm_details = {
-                "current": progress_bar.n,  # Current progress
-                "total": progress_bar.total,  # Total generations
-                "rate": progress_bar.format_dict["rate"],  # Generations per second
-                "elapsed_time": progress_bar.format_dict["elapsed"],  # Elapsed time
-            }
             progress_bar.close()
 
-    # Total runtime and save summary
     total_time = time.time() - start_time
     experiment_details = {
         "experiment_number": experiment_number,
+        "dataset_name": dataset_name,
         "target_class_for_confidence": target_class_for_confidence,
         "target_class_for_similarity": target_class_for_similarity,
         "similarity_metric": similarity_metric,
-        "model_name": model_name,
-        "dataset_name": dataset_name,
         "replicate": replicate,
-        "generation_interval": generation_interval,
         "seed": seed,
     }
-    save_run_summary(output_subdir, early_stop_gen, experiment_details, tqdm_details)
 
-    print(f"Run completed in {total_time:.2f} seconds.")
-    print(f"Output saved to: {output_subdir}")
+    save_run_summary(output_subdir, early_stop_gen, experiment_details, {
+        "current": ngen,
+        "total": ngen,
+        "rate": ngen / total_time,
+        "elapsed_time": total_time
+    })
+    print(f"Run completed in {total_time:.2f} seconds. Results saved to: {output_subdir}")
