@@ -1,7 +1,7 @@
 #!/bin/bash --login
 #SBATCH --output=logs/exp_%x_%A_%a.out
 #SBATCH --error=logs/exp_%x_%A_%a.err
-#SBATCH --time=48:00:00
+#SBATCH --time=15:59:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -24,7 +24,8 @@
 # 5. [replicate_start]: Starting replicate index (optional, default is 1, which will cover 10 (1 to 10) replicates)
 #
 # Example:
-# sbatch runner.sh 2_1b mnistDigits 1000 100000 11
+# sbatch runner_2_1b.sh 2_1b mnistDigits 1000 100000 11
+# sbatch runner_2_1b.sh 2_1b sklearnDigits 100 50000 1
 # This runs experiment 2_1b on the mnistDigits dataset, with an interval of 1000,
 # 100000 generations, and replicates starting from 11 to 20.
 
@@ -46,6 +47,10 @@ classes=(0 1 2 3 4 5 6 7 8 9)
 metric="SSIM"
 random_seed=42  # Seed for reproducibility
 
+# Randomly generated class pairs for seed 42
+targets=(9 1 0 3 3 3 1 1 9 7)
+non_targets=(0 6 4 9 5 1 9 5 5 6)
+
 # Input Parameters
 experiment=${1:?"Experiment number is required"}
 dataset=${2:?"Dataset name is required"}
@@ -53,15 +58,6 @@ interval=${3:?"Interval is required"}
 generations=${4:?"Number of generations is required"}
 replicate_start=${5:-1}
 
-# Generate all class pairs and select 10 random combinations
-python - <<EOF
-import random
-random.seed(${random_seed})
-classes = ${classes}
-all_pairs = [(i, j) for i in classes for j in classes if i != j]
-selected_pairs = random.sample(all_pairs, 10)
-print("\n".join([f"{pair[0]} {pair[1]}" for pair in selected_pairs]))
-EOF > selected_pairs.txt
 
 # Derived Parameters
 replicates_per_job=10
@@ -83,9 +79,14 @@ replicate=$((replicate_start + replicate_offset))
 
 model=${models[$model_index]}
 
-# Assign class pairs dynamically
-target_class=$(sed -n "${task_id}p" selected_pairs.txt | cut -d' ' -f1)
-non_target_class=$(sed -n "${task_id}p" selected_pairs.txt | cut -d' ' -f2)
+# Adjust job duration for non-CNN/RNN models
+if [[ "$model" != "CNN" && "$model" != "RNN" ]]; then
+    scontrol update jobid=$SLURM_JOB_ID TimeLimit=03:59:00
+fi
+
+# Assign class pairs dynamically from the arrays
+target_class=${targets[$replicate_offset]}
+non_target_class=${non_targets[$replicate_offset]}
 
 # Define a unique job name
 job_name="e${experiment}_${dataset}_m${model}_tc${target_class}_ntc${non_target_class}_r${replicate}_t${task_id}"

@@ -198,7 +198,7 @@ def run():
         f"Exp_{args.experiment_number}",
         args.dataset_name,
         args.model_name,
-        f"class_{args.target_class_for_confidence}",
+        f"target_class_{args.target_class_for_confidence}_non_target_class_{args.target_class_for_similarity}",
         f"replicate_{args.replicate}"
     )
     os.makedirs(output_subdir, exist_ok=True)
