@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=4G
-#SBATCH --array=1-600
+#SBATCH --mem=8G
+#SBATCH --array=1-400
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=guptaa23@msu.edu
 #SBATCH --job-name=exp_%x_%A_%a  # Base job name
@@ -29,8 +29,8 @@
 # This runs experiment 2_1b on the mnistDigits dataset, with an interval of 1000,
 # 100000 generations, and replicates starting from 11 to 20.
 
-# As we are doing 30 replicates for each dataset, model and class, 
-# we need host this script 3 times with different replicate_start values, i.e., 1, 11, 21
+# As we are doing 30 replicates for each dataset, model, and class, 
+# we need to host this script 3 times with different replicate_start values, i.e., 1, 11, 21
 # also, consider lowering compute time to 20 hours, and memory to 2G in case of sklearnDigits
 
 # Ensure required directories exist
@@ -42,8 +42,7 @@ conda activate pyEnv3.10
 export PATH=~/miniforge3/envs/pyEnv3.10/bin:$PATH
 
 # Fixed Parameters
-models=("XGB" "MLP" "SVM" "RF" "CNN" "RNN")
-classes=(0 1 2 3 4 5 6 7 8 9)
+models=("XGB" "MLP" "SVM" "RF")
 metric="SSIM"
 random_seed=42  # Seed for reproducibility
 
@@ -52,44 +51,41 @@ targets=(9 1 0 3 3 3 1 1 9 7)
 non_targets=(0 6 4 9 5 1 9 5 5 6)
 
 # Input Parameters
-experiment=${1:?"Experiment number is required"}
-dataset=${2:?"Dataset name is required"}
-interval=${3:?"Interval is required"}
-generations=${4:?"Number of generations is required"}
+experiment=${1:?-"Experiment number is required"}
+dataset=${2:?-"Dataset name is required"}
+interval=${3:?-"Interval is required"}
+generations=${4:?-"Number of generations is required"}
 replicate_start=${5:-1}
 
-
 # Derived Parameters
-replicates_per_job=10
-replicate_end=$((replicate_start + replicates_per_job - 1))
-task_id=$SLURM_ARRAY_TASK_ID
+replicates_per_class=10
+num_class_combinations=${#targets[@]}  # Number of class combinations (10)
+jobs_per_model=$((num_class_combinations * replicates_per_class))  # Jobs per model (10 * 10 = 100)
+num_models=${#models[@]}  # Total number of models (4)
+total_jobs=$((jobs_per_model * num_models))  # Total jobs across all models (400)
 
-# Calculate Indices
-num_models=${#models[@]}
-total_jobs=$((num_models * replicates_per_job))
-
-if (( task_id > total_jobs )); then
-    echo "Task ID $task_id exceeds total jobs $total_jobs. Exiting."
+# Check if task ID exceeds total jobs
+if (( SLURM_ARRAY_TASK_ID > total_jobs )); then
+    echo "Task ID $SLURM_ARRAY_TASK_ID exceeds total jobs $total_jobs. Exiting."
     exit 1
 fi
 
-model_index=$(( (task_id - 1) / replicates_per_job % num_models ))
-replicate_offset=$(( (task_id - 1) % replicates_per_job ))
+# Calculate the model index and task offset within the model
+model_index=$(( (SLURM_ARRAY_TASK_ID - 1) / jobs_per_model ))  # Determine which model the task ID corresponds to
+task_offset=$(( (SLURM_ARRAY_TASK_ID - 1) % jobs_per_model ))  # Offset within the current model's jobs
+
+# Calculate the replicate offset and class combination index
+class_combination_index=$(( task_offset / replicates_per_class ))  # Class combination index (0-9)
+replicate_offset=$(( task_offset % replicates_per_class ))  # Replicate index within the class combination (0-9)
+
+# Assign model, target, and non-target classes
+model=${models[$model_index]}
+target_class=${targets[$class_combination_index]}
+non_target_class=${non_targets[$class_combination_index]}
 replicate=$((replicate_start + replicate_offset))
 
-model=${models[$model_index]}
-
-# Adjust job duration for non-CNN/RNN models
-if [[ "$model" != "CNN" && "$model" != "RNN" ]]; then
-    scontrol update jobid=$SLURM_JOB_ID TimeLimit=03:59:00
-fi
-
-# Assign class pairs dynamically from the arrays
-target_class=${targets[$replicate_offset]}
-non_target_class=${non_targets[$replicate_offset]}
-
 # Define a unique job name
-job_name="e${experiment}_${dataset}_m${model}_tc${target_class}_ntc${non_target_class}_r${replicate}_t${task_id}"
+job_name="e${experiment}_${dataset}_m${model}_tc${target_class}_ntc${non_target_class}_r${replicate}_t${SLURM_ARRAY_TASK_ID}"
 
 # Update SLURM's job name dynamically
 scontrol update jobid=$SLURM_JOB_ID JobName="$job_name"
@@ -99,10 +95,9 @@ output_dir="/mnt/home/guptaa23/Active/EPIC_fool/projectEvoFool/output/exp${exper
 mkdir -p "$output_dir"
 
 # Debugging Info
-echo "Task ID: $task_id, Job ID: $SLURM_JOB_ID"
-echo "Experiment: $experiment, Dataset: $dataset, Model: $model"
-echo "Target Class: $target_class, Non-Target Class: $non_target_class, Replicate: $replicate"
-echo "Interval: $interval, Generations: $generations"
+echo "Task ID: $SLURM_ARRAY_TASK_ID, Model Index: $model_index, Task Offset: $task_offset"
+echo "Class Combination Index: $class_combination_index, Replicate Offset: $replicate_offset"
+echo "Model: $model, Target Class: $target_class, Non-Target Class: $non_target_class, Replicate: $replicate"
 echo "Output Directory: $output_dir"
 env | grep SLURM
 
