@@ -5,11 +5,13 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:1  # Request 1 GPU
 #SBATCH --mem=8G
-#SBATCH --array=1-400
+#SBATCH --array=1-200
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=guptaa23@msu.edu
 #SBATCH --job-name=exp_%x_%A_%a  # Base job name
+
 
 # Guide to Running the Script
 # This script runs evolutionary experiments with configurable parameters.
@@ -42,7 +44,7 @@ conda activate pyEnv3.10
 export PATH=~/miniforge3/envs/pyEnv3.10/bin:$PATH
 
 # Fixed Parameters
-models=("XGB" "MLP" "SVM" "RF")
+models=("CNN" "RNN")
 metric="SSIM"
 random_seed=42  # Seed for reproducibility
 
